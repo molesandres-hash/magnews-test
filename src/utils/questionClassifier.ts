@@ -21,7 +21,14 @@ export function isNAValue(value: string | null | undefined): boolean {
 export function parseNumericValue(value: string): number | null {
   if (isNAValue(value)) return null;
   
-  const cleaned = value.trim().replace(',', '.');
+  let cleaned = value.trim();
+  
+  // Strip "v" or "V" prefix commonly used in Magnews scale values (e.g., "v10" -> "10")
+  if (/^[vV]\d/.test(cleaned)) {
+    cleaned = cleaned.substring(1);
+  }
+  
+  cleaned = cleaned.replace(',', '.');
   const num = parseFloat(cleaned);
   
   if (isNaN(num)) return null;
