@@ -295,14 +295,16 @@ function createFoglio2Sheet(workbook: ExcelJS.Workbook, survey: ParsedSurvey): v
 /**
  * Sheet 3: Persone - FORMULA-DRIVEN with VLOOKUP
  * 
- * Layout (matches OK file):
- * - Row 21: Labels to search (Cognome, Nome, etc.) - one per column
- * - Rows 1-20: VLOOKUP formulas for each respondent (columns) x field (rows)
+ * Layout (matches OK file EXACTLY):
+ * - COLUMNS A, B, C, D... = Respondents (one column per respondent)
+ * - ROWS 1-20 = Data fields (VLOOKUP formulas pulling from Export)
+ * - ROW 21 = Field labels to search (Cognome, Nome, Carica, Comitato 1, Ruolo 1, etc.)
  * 
- * Formula pattern:
- * =IFERROR(VLOOKUP([col]$21,Export!$B:$M,[row_index],FALSE)," ")
+ * Formula pattern for cell A1:
+ * =IFERROR(VLOOKUP(A$21,Export!$B:$M,2,FALSE)," ")
  * 
- * Columns = respondents, Rows = metadata fields
+ * The formula searches for the field label in Export column B,
+ * and returns the value from the respondent's data column.
  */
 function createPersoneSheet(
   workbook: ExcelJS.Workbook, 
@@ -313,109 +315,87 @@ function createPersoneSheet(
   const respondents = survey.respondents;
   const numRespondents = respondents.length;
 
-  // Define the metadata fields to look up (these go in row 21 as search keys)
-  // These are the labels in column B of Export that we want to find
-  const fieldLabels = ['Cognome', 'Nome'];
-  const numFields = fieldLabels.length;
+  // Define the metadata fields to look up (these are row labels in Export)
+  // These match the structure of the original OK file
+  const fieldLabels = [
+    'Cognome',      // Row 1 in Persone
+    'Nome',         // Row 2 in Persone
+    'Carica',       // Row 3
+    'Comitato 1',   // Row 4
+    'Ruolo 1',      // Row 5
+    'Comitato 2',   // Row 6
+    'Ruolo 2',      // Row 7
+    'Comitato 3',   // Row 8
+    'Ruolo 3',      // Row 9
+    'Comitato 4',   // Row 10
+    'Ruolo 4',      // Row 11
+    'Comitato 5',   // Row 12
+    'Ruolo 5',      // Row 13
+    'Genere',       // Row 14
+    'Titolo',       // Row 15
+    'Ruolo',        // Row 16
+    'Email',        // Row 17
+    'Telefono',     // Row 18
+    'Indirizzo',    // Row 19
+    'Note',         // Row 20
+  ];
+  const numFields = Math.min(fieldLabels.length, 20); // Max 20 rows of data
 
-  // Row 21: Headers/labels to search for (one per column A, B, C, ...)
-  // Each column represents a respondent
+  // ROW 21: Field labels to search for (one per ROW, not column)
+  // In the OK file structure, row 21 contains the search keys
+  // Each column (A, B, C...) in row 21 has the same field labels
+  // because each column represents a different respondent
   const row21 = sheet.getRow(21);
   for (let respIdx = 0; respIdx < numRespondents; respIdx++) {
-    const col = respIdx + 1; // Column A=1, B=2, etc.
-    // Each respondent column needs to know which field it's for
-    // Actually, in the OK file: row 21 has the field names (Cognome, Nome, etc.)
-    // and columns are respondents. Let me re-read the pattern.
-    
-    // From the OK file:
-    // A21, B21, C21... contain the field labels (or respondent identifiers)
-    // The VLOOKUP searches for these in Export
-    
-    // Actually the pattern is: columns = respondents, but the search key is always the same field
-    // So we need to transpose: each COLUMN is a respondent, each ROW is a field
+    const colNum = respIdx + 1; // Column A=1, B=2, etc.
+    // Row 21 for each column contains "the identifier" for that respondent
+    // In the OK file, this is used as the lookup key
+    row21.getCell(colNum).value = respondents[respIdx].displayName || `Rispondente ${respIdx + 1}`;
   }
-
-  // Re-implementation based on OK file structure:
-  // Columns A onwards = respondents
-  // Rows 1-20 = data fields (Cognome, Nome, etc.)
-  // Row 21 = search keys (the field labels)
-
-  // Row 21: Field labels to search for
-  for (let fieldIdx = 0; fieldIdx < fieldLabels.length; fieldIdx++) {
-    row21.getCell(1 + fieldIdx).value = fieldLabels[fieldIdx];
-  }
-  row21.font = { italic: true };
+  row21.font = { italic: true, color: { argb: 'FF888888' } };
   row21.commit();
 
-  // For each respondent (column), create VLOOKUP formulas for each field (row)
-  // Column A = respondent 1, Column B = respondent 2, etc.
-  // The formula looks up the field label from row 21 in Export and returns the value from the respondent's column
-  
-  // BUT wait - in Export, the structure is:
-  // Column A: Key, Column B: Label, Column C onwards: Respondent values
-  // So to get a respondent's Cognome, we VLOOKUP "Cognome" in Export!$B:$M and return column 3+respIdx
-  
-  // Corrected structure for Persone:
-  // Each ROW = a respondent
-  // Each COLUMN = a field (Cognome, Nome, etc.)
-  // This makes more sense for a "Persone" (people) listing
-  
-  // Headers in row 1
-  const headerRow = sheet.getRow(1);
-  headerRow.getCell(1).value = '#';
-  fieldLabels.forEach((label, idx) => {
-    headerRow.getCell(2 + idx).value = label;
-  });
-  styleHeaderRow(headerRow);
-  headerRow.commit();
+  // ROWS 1-20: VLOOKUP formulas for each field
+  // Each column represents a respondent, each row represents a field
+  // Formula: =IFERROR(VLOOKUP([field_label],Export!$B:$M,[respColIndex],FALSE)," ")
+  // 
+  // In Export, the layout is:
+  // - Column A: Key formula
+  // - Column B: Label (Cognome, Nome, question text)
+  // - Column C: Respondent 1 values
+  // - Column D: Respondent 2 values
+  // - etc.
+  //
+  // So for VLOOKUP: search in B column, return from column C/D/E... based on respondent
 
-  // Row 21: Search keys (field labels) - used by VLOOKUP
-  const searchKeyRow = sheet.getRow(21);
-  fieldLabels.forEach((label, idx) => {
-    searchKeyRow.getCell(2 + idx).value = label;
-  });
-  searchKeyRow.font = { italic: true, color: { argb: 'FF888888' } };
-  searchKeyRow.commit();
-
-  // Data rows: one per respondent with VLOOKUP formulas
-  for (let respIdx = 0; respIdx < numRespondents; respIdx++) {
-    const rowNum = 2 + respIdx; // Start from row 2
+  for (let fieldIdx = 0; fieldIdx < numFields; fieldIdx++) {
+    const rowNum = fieldIdx + 1; // Row 1, 2, 3...
     const row = sheet.getRow(rowNum);
-    
-    row.getCell(1).value = respIdx + 1; // Index number
+    const fieldLabel = fieldLabels[fieldIdx];
 
-    // For each field, create a VLOOKUP formula
-    // Formula: =IFERROR(VLOOKUP([field_cell]$21,Export!$B:$M,[colIndex],FALSE)," ")
-    // Where colIndex = 2 for the first data column in Export (C), 3 for D, etc.
-    // BUT we need to get the value for THIS specific respondent
-    // In Export: respondent 1 is in column C (index 3), respondent 2 in D (index 4), etc.
-    
-    // The VLOOKUP searches for the field name (e.g., "Cognome") in Export column B
-    // and returns the value from the respondent's column
-    const exportColIndex = 2 + respIdx; // Column C=2 offset, D=3, etc. but VLOOKUP uses 1-based from range start
-
-    for (let fieldIdx = 0; fieldIdx < fieldLabels.length; fieldIdx++) {
-      const cellCol = 2 + fieldIdx;
-      const colLetter = colToLetter(cellCol);
+    for (let respIdx = 0; respIdx < numRespondents; respIdx++) {
+      const colNum = respIdx + 1; // Column A=1, B=2, C=3...
+      const colLetter = colToLetter(colNum);
       
-      // VLOOKUP formula: look up the field label from row 21 in Export!$B:$M
-      // Return column index is 2 for respondent 1 (since range starts at B, C is column 2)
-      // Actually: if range is $B:$M, column B=1, C=2, D=3, etc.
-      // So for respondent 1 (column C in Export), return index = 2
-      // For respondent 2 (column D in Export), return index = 3
-      const returnColIndex = 1 + respIdx + 1; // +1 for 1-based, +respIdx for respondent offset
+      // Return column index: for respondent 1, return col 2 (since range starts at B, C is index 2)
+      // For respondent 2, return col 3 (D is index 3), etc.
+      const returnColIndex = respIdx + 2;
       
-      row.getCell(cellCol).value = {
-        formula: `IFERROR(VLOOKUP(${colLetter}$21,Export!$B:$M,${returnColIndex},FALSE)," ")`
+      // Create the VLOOKUP formula
+      // Searches for the field label (hardcoded) in Export!$B:$M and returns the respondent's value
+      row.getCell(colNum).value = {
+        formula: `IFERROR(VLOOKUP("${fieldLabel}",Export!$B:$M,${returnColIndex},FALSE)," ")`
       };
     }
-    
     row.commit();
   }
 
-  sheet.getColumn(1).width = 5;
-  sheet.getColumn(2).width = 20;
-  sheet.getColumn(3).width = 20;
+  // Set column widths
+  for (let i = 1; i <= numRespondents; i++) {
+    sheet.getColumn(i).width = 18;
+  }
+  
+  sheet.views = [{ state: 'frozen', xSplit: 0, ySplit: 0 }];
 }
 
 /**
@@ -454,9 +434,9 @@ function createEstrazioneGraficiSheet(
 
   let currentRow = 2;
 
-  // Only scale questions for this sheet
-  const scaleQuestions = survey.questions.filter(q => q.type === 'scale_1_10_na');
-  const grouped = groupQuestionsByBlock(scaleQuestions);
+  // ALL questions for this sheet (not just scale, to include open-text)
+  const allQuestions = survey.questions;
+  const grouped = groupQuestionsByBlock(allQuestions);
   const sortedBlocks = Array.from(grouped.keys()).sort((a, b) => {
     if (a === null) return 1;
     if (b === null) return -1;
@@ -490,16 +470,23 @@ function createEstrazioneGraficiSheet(
       row.getCell(2).alignment = { wrapText: true, vertical: 'top' };
 
       // Column C: MEDIE formula (average of values > 0, ignoring N/A)
-      row.getCell(3).value = { 
-        formula: `IFERROR(SUMIF(${firstRespCol}${currentRow}:${lastRespCol}${currentRow},">0")/COUNTIF(${firstRespCol}${currentRow}:${lastRespCol}${currentRow},">0")," ")` 
-      };
-      row.getCell(3).font = { bold: true };
-      row.getCell(3).fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FFFEF3C7' }
-      };
-      row.getCell(3).alignment = { horizontal: 'center' };
+      // Only for scale questions; for open-text questions, leave empty or "-"
+      if (question.type === 'scale_1_10_na') {
+        row.getCell(3).value = { 
+          formula: `IFERROR(SUMIF(${firstRespCol}${currentRow}:${lastRespCol}${currentRow},">0")/COUNTIF(${firstRespCol}${currentRow}:${lastRespCol}${currentRow},">0")," ")` 
+        };
+        row.getCell(3).font = { bold: true };
+        row.getCell(3).fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFFEF3C7' }
+        };
+        row.getCell(3).alignment = { horizontal: 'center' };
+      } else {
+        row.getCell(3).value = '-';
+        row.getCell(3).font = { italic: true, color: { argb: 'FF888888' } };
+        row.getCell(3).alignment = { horizontal: 'center' };
+      }
 
       // Columns D onwards: VLOOKUP formulas to Export
       // colIndex starts at 3 (column C in Export is first respondent)
@@ -532,6 +519,11 @@ function createEstrazioneGraficiSheet(
  * 
  * This sheet shows one respondent at a time based on selector in H5
  * Uses IFS formula to pick the correct column from Export
+ * 
+ * Dashboard structure:
+ * - H5: Respondent selector (1, 2, 3...)
+ * - G8:H14: INDEX formulas showing respondent metadata from Persone sheet
+ * - Column D: VLOOKUP+IFS formulas showing selected respondent's answers
  */
 function createPerPdfSheet(
   workbook: ExcelJS.Workbook, 
@@ -546,9 +538,19 @@ function createPerPdfSheet(
   sheet.getRow(1).getCell(1).font = { bold: true, size: 16 };
   sheet.getRow(1).height = 30;
 
+  // Label for selector
+  sheet.getRow(4).getCell(7).value = 'Seleziona partecipante:';
+  sheet.getRow(4).getCell(7).font = { bold: true };
+
   // Respondent selector in H5
   sheet.getRow(5).getCell(8).value = 1; // Default to first respondent
-  sheet.getRow(5).getCell(7).value = 'Rispondente:';
+  sheet.getRow(5).getCell(7).value = 'N°:';
+  sheet.getCell('H5').font = { bold: true, size: 14 };
+  sheet.getCell('H5').fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: 'FFFEF3C7' }
+  };
   
   // Add data validation for respondent selector (1 to numRespondents)
   sheet.getCell('H5').dataValidation = {
@@ -560,28 +562,60 @@ function createPerPdfSheet(
     error: `Inserire un numero da 1 a ${numRespondents}`
   };
 
+  // === G8:H14: INDEX formulas for respondent metadata from Persone sheet ===
+  // The Persone sheet has: columns=respondents, rows=fields
+  // Row 1=Cognome, Row 2=Nome, Row 3=Carica, etc.
+  // To get data for respondent N, we use INDEX to pick the Nth column
+  
+  const metadataLabels = [
+    { label: 'Cognome:', personeRow: 1 },
+    { label: 'Nome:', personeRow: 2 },
+    { label: 'Carica:', personeRow: 3 },
+    { label: 'Comitato 1:', personeRow: 4 },
+    { label: 'Ruolo 1:', personeRow: 5 },
+    { label: 'Comitato 2:', personeRow: 6 },
+    { label: 'Ruolo 2:', personeRow: 7 },
+  ];
+
+  metadataLabels.forEach((meta, idx) => {
+    const rowNum = 8 + idx; // Rows 8, 9, 10, 11, 12, 13, 14
+    const row = sheet.getRow(rowNum);
+    
+    // Column F: Label
+    row.getCell(6).value = meta.label;
+    row.getCell(6).font = { bold: true };
+    row.getCell(6).alignment = { horizontal: 'right' };
+    
+    // Column G: INDEX formula to get value from Persone sheet
+    // INDEX(Persone!1:1, H5) gets the value from row 1, column H5
+    row.getCell(7).value = {
+      formula: `INDEX(Persone!${meta.personeRow}:${meta.personeRow},'per pdf '!$H$5)`
+    };
+    row.getCell(7).alignment = { horizontal: 'left' };
+  });
+
   // Build the IFS formula for column selection
   // IFS($H$5=1,3,$H$5=2,4,$H$5=3,5,...)
   let ifsArgs = '';
-  for (let i = 1; i <= numRespondents; i++) {
+  for (let i = 1; i <= Math.min(numRespondents, 17); i++) {
     const colIndex = 2 + i; // Column C=3 for respondent 1, D=4 for respondent 2, etc.
     ifsArgs += `$H$5=${i},${colIndex}`;
-    if (i < numRespondents) ifsArgs += ',';
+    if (i < Math.min(numRespondents, 17)) ifsArgs += ',';
   }
 
   // Headers
-  const headerRow = sheet.getRow(7);
+  const headerRow = sheet.getRow(16);
   headerRow.getCell(1).value = 'Chiave';
   headerRow.getCell(2).value = 'Domanda';
   headerRow.getCell(3).value = 'MEDIE';
   headerRow.getCell(4).value = 'Risposta';
   styleHeaderRow(headerRow);
 
-  let currentRow = 8;
+  let currentRow = 17;
 
-  // Scale questions
-  const scaleQuestions = survey.questions.filter(q => q.type === 'scale_1_10_na');
-  const grouped = groupQuestionsByBlock(scaleQuestions);
+  // ALL questions (not just scale, to include open-text responses)
+  const allQuestions = survey.questions;
+  const grouped = groupQuestionsByBlock(allQuestions);
   const sortedBlocks = Array.from(grouped.keys()).sort((a, b) => {
     if (a === null) return 1;
     if (b === null) return -1;
@@ -613,17 +647,23 @@ function createPerPdfSheet(
       row.getCell(2).value = labelWithKey;
       row.getCell(2).alignment = { wrapText: true, vertical: 'top' };
 
-      // Column C: MEDIE (reference to estrazione per grafici)
-      row.getCell(3).value = { 
-        formula: `IFERROR(VLOOKUP(A${currentRow},'estrazione per grafici '!$A:$C,3,FALSE),"")` 
-      };
-      row.getCell(3).font = { bold: true };
-      row.getCell(3).fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FFFEF3C7' }
-      };
-      row.getCell(3).alignment = { horizontal: 'center' };
+      // Column C: MEDIE (reference to estrazione per grafici) - only for scale questions
+      if (question.type === 'scale_1_10_na') {
+        row.getCell(3).value = { 
+          formula: `IFERROR(VLOOKUP(A${currentRow},'estrazione per grafici '!$A:$C,3,FALSE),"")` 
+        };
+        row.getCell(3).font = { bold: true };
+        row.getCell(3).fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFFEF3C7' }
+        };
+        row.getCell(3).alignment = { horizontal: 'center' };
+      } else {
+        row.getCell(3).value = '-';
+        row.getCell(3).font = { italic: true, color: { argb: 'FF888888' } };
+        row.getCell(3).alignment = { horizontal: 'center' };
+      }
 
       // Column D: Response for selected respondent (IFS formula)
       row.getCell(4).value = { 
@@ -639,8 +679,9 @@ function createPerPdfSheet(
   sheet.getColumn(1).width = 10;
   sheet.getColumn(2).width = 60;
   sheet.getColumn(3).width = 10;
-  sheet.getColumn(4).width = 15;
-  sheet.getColumn(7).width = 12;
+  sheet.getColumn(4).width = 20;
+  sheet.getColumn(6).width = 12;
+  sheet.getColumn(7).width = 25;
   sheet.getColumn(8).width = 8;
 }
 
