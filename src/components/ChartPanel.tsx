@@ -3,9 +3,14 @@ import { useSurveyStore } from '@/store/surveyStore';
 import { BarChart3 } from 'lucide-react';
 
 const SCALE_ORDER = ['10', '9', '8', '7', '6', '5', '4', '3', '2', '1', 'N/A'];
+// Gradient colors: Green for high values, Yellow for mid, Orange/Red for low, Gray for N/A
 const CHART_COLORS = [
-  '#3B82F6', '#3B82F6', '#3B82F6', '#3B82F6', '#3B82F6',
-  '#60A5FA', '#60A5FA', '#60A5FA', '#93C5FD', '#BFDBFE', '#94A3B8'
+  '#22C55E', '#22C55E', '#22C55E',  // 10, 9, 8 = Green (high)
+  '#84CC16',                         // 7 = Light green
+  '#FDE047', '#F59E0B',              // 6, 5 = Yellow/Orange (mid)
+  '#F97316', '#EF4444',              // 4, 3 = Orange/Red
+  '#DC2626', '#B91C1C',              // 2, 1 = Dark red (low)
+  '#94A3B8'                          // N/A = Gray
 ];
 
 export function ChartPanel() {
