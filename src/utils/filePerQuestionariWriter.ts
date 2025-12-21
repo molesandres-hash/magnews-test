@@ -395,7 +395,8 @@ function createPersoneSheet(
     sheet.getColumn(i).width = 18;
   }
   
-  sheet.views = [{ state: 'frozen', xSplit: 0, ySplit: 0 }];
+  // NOTE: using a frozen view with 0/0 split can generate invalid sheet XML in Excel.
+  sheet.views = [{ state: 'normal' }];
 }
 
 /**
