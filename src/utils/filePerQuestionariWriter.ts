@@ -22,10 +22,9 @@ export async function generateFilePerQuestionari(survey: ParsedSurvey): Promise<
   const respondents = survey.respondents;
   const numRespondents = respondents.length;
   
-  // Calculate the column letter for the last respondent (for VLOOKUP range)
-  // Column C is first respondent, so last is C + numRespondents - 1 = column 2 + numRespondents
-  const lastDataCol = colToLetter(2 + numRespondents);
-  const exportRange = `Export!$A$1:$${lastDataCol}$600`;
+  // FIXED range to column T as per the OK file specification
+  // This supports up to ~17 respondents
+  const exportRange = 'Export!$A$1:$T$600';
 
   // Sheet 1: Export - THE ONLY SHEET WITH RAW DATA
   const exportRowMap = createExportSheet(workbook, survey);
@@ -294,8 +293,16 @@ function createFoglio2Sheet(workbook: ExcelJS.Workbook, survey: ParsedSurvey): v
 }
 
 /**
- * Sheet 3: Persone - FORMULA-DRIVEN
- * Uses VLOOKUP to Export to get respondent metadata
+ * Sheet 3: Persone - FORMULA-DRIVEN with VLOOKUP
+ * 
+ * Layout (matches OK file):
+ * - Row 21: Labels to search (Cognome, Nome, etc.) - one per column
+ * - Rows 1-20: VLOOKUP formulas for each respondent (columns) x field (rows)
+ * 
+ * Formula pattern:
+ * =IFERROR(VLOOKUP([col]$21,Export!$B:$M,[row_index],FALSE)," ")
+ * 
+ * Columns = respondents, Rows = metadata fields
  */
 function createPersoneSheet(
   workbook: ExcelJS.Workbook, 
@@ -303,30 +310,108 @@ function createPersoneSheet(
   exportRange: string
 ): void {
   const sheet = workbook.addWorksheet('Persone');
+  const respondents = survey.respondents;
+  const numRespondents = respondents.length;
 
-  // Header row with field names
-  const fields = ['#', 'Cognome', 'Nome'];
-  const headerRow = sheet.addRow(fields);
+  // Define the metadata fields to look up (these go in row 21 as search keys)
+  // These are the labels in column B of Export that we want to find
+  const fieldLabels = ['Cognome', 'Nome'];
+  const numFields = fieldLabels.length;
+
+  // Row 21: Headers/labels to search for (one per column A, B, C, ...)
+  // Each column represents a respondent
+  const row21 = sheet.getRow(21);
+  for (let respIdx = 0; respIdx < numRespondents; respIdx++) {
+    const col = respIdx + 1; // Column A=1, B=2, etc.
+    // Each respondent column needs to know which field it's for
+    // Actually, in the OK file: row 21 has the field names (Cognome, Nome, etc.)
+    // and columns are respondents. Let me re-read the pattern.
+    
+    // From the OK file:
+    // A21, B21, C21... contain the field labels (or respondent identifiers)
+    // The VLOOKUP searches for these in Export
+    
+    // Actually the pattern is: columns = respondents, but the search key is always the same field
+    // So we need to transpose: each COLUMN is a respondent, each ROW is a field
+  }
+
+  // Re-implementation based on OK file structure:
+  // Columns A onwards = respondents
+  // Rows 1-20 = data fields (Cognome, Nome, etc.)
+  // Row 21 = search keys (the field labels)
+
+  // Row 21: Field labels to search for
+  for (let fieldIdx = 0; fieldIdx < fieldLabels.length; fieldIdx++) {
+    row21.getCell(1 + fieldIdx).value = fieldLabels[fieldIdx];
+  }
+  row21.font = { italic: true };
+  row21.commit();
+
+  // For each respondent (column), create VLOOKUP formulas for each field (row)
+  // Column A = respondent 1, Column B = respondent 2, etc.
+  // The formula looks up the field label from row 21 in Export and returns the value from the respondent's column
+  
+  // BUT wait - in Export, the structure is:
+  // Column A: Key, Column B: Label, Column C onwards: Respondent values
+  // So to get a respondent's Cognome, we VLOOKUP "Cognome" in Export!$B:$M and return column 3+respIdx
+  
+  // Corrected structure for Persone:
+  // Each ROW = a respondent
+  // Each COLUMN = a field (Cognome, Nome, etc.)
+  // This makes more sense for a "Persone" (people) listing
+  
+  // Headers in row 1
+  const headerRow = sheet.getRow(1);
+  headerRow.getCell(1).value = '#';
+  fieldLabels.forEach((label, idx) => {
+    headerRow.getCell(2 + idx).value = label;
+  });
   styleHeaderRow(headerRow);
+  headerRow.commit();
 
-  // For each respondent, create a row with VLOOKUP formulas
-  survey.respondents.forEach((respondent, idx) => {
-    const rowNum = idx + 2; // Starting from row 2
+  // Row 21: Search keys (field labels) - used by VLOOKUP
+  const searchKeyRow = sheet.getRow(21);
+  fieldLabels.forEach((label, idx) => {
+    searchKeyRow.getCell(2 + idx).value = label;
+  });
+  searchKeyRow.font = { italic: true, color: { argb: 'FF888888' } };
+  searchKeyRow.commit();
+
+  // Data rows: one per respondent with VLOOKUP formulas
+  for (let respIdx = 0; respIdx < numRespondents; respIdx++) {
+    const rowNum = 2 + respIdx; // Start from row 2
     const row = sheet.getRow(rowNum);
     
-    row.getCell(1).value = idx + 1; // Index number
+    row.getCell(1).value = respIdx + 1; // Index number
+
+    // For each field, create a VLOOKUP formula
+    // Formula: =IFERROR(VLOOKUP([field_cell]$21,Export!$B:$M,[colIndex],FALSE)," ")
+    // Where colIndex = 2 for the first data column in Export (C), 3 for D, etc.
+    // BUT we need to get the value for THIS specific respondent
+    // In Export: respondent 1 is in column C (index 3), respondent 2 in D (index 4), etc.
     
-    // Cognome: VLOOKUP to Export
-    // In Export, Cognome is in row 1, and the respondent's surname is in column 3+idx
-    // But for Persone, we want each respondent as a row, so we reference directly
-    const surname = respondent.originalData['Cognome'] || respondent.originalData['cognome'] || respondent.displayName.split(' ')[0] || '';
-    const nome = respondent.originalData['Nome'] || respondent.originalData['nome'] || respondent.displayName.split(' ').slice(1).join(' ') || '';
-    
-    row.getCell(2).value = surname;
-    row.getCell(3).value = nome;
+    // The VLOOKUP searches for the field name (e.g., "Cognome") in Export column B
+    // and returns the value from the respondent's column
+    const exportColIndex = 2 + respIdx; // Column C=2 offset, D=3, etc. but VLOOKUP uses 1-based from range start
+
+    for (let fieldIdx = 0; fieldIdx < fieldLabels.length; fieldIdx++) {
+      const cellCol = 2 + fieldIdx;
+      const colLetter = colToLetter(cellCol);
+      
+      // VLOOKUP formula: look up the field label from row 21 in Export!$B:$M
+      // Return column index is 2 for respondent 1 (since range starts at B, C is column 2)
+      // Actually: if range is $B:$M, column B=1, C=2, D=3, etc.
+      // So for respondent 1 (column C in Export), return index = 2
+      // For respondent 2 (column D in Export), return index = 3
+      const returnColIndex = 1 + respIdx + 1; // +1 for 1-based, +respIdx for respondent offset
+      
+      row.getCell(cellCol).value = {
+        formula: `IFERROR(VLOOKUP(${colLetter}$21,Export!$B:$M,${returnColIndex},FALSE)," ")`
+      };
+    }
     
     row.commit();
-  });
+  }
 
   sheet.getColumn(1).width = 5;
   sheet.getColumn(2).width = 20;
@@ -363,9 +448,9 @@ function createEstrazioneGraficiSheet(
   styleHeaderRow(headerRow);
   headerRow.commit();
 
-  // Calculate column range for MEDIE formula
-  const firstRespCol = colToLetter(4); // D
-  const lastRespCol = colToLetter(3 + numRespondents);
+  // FIXED column range for MEDIE formula (always D to T per OK file spec)
+  const firstRespCol = 'D';
+  const lastRespCol = 'T';
 
   let currentRow = 2;
 
