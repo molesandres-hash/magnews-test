@@ -1,30 +1,54 @@
 import { useState } from 'react';
-import { Download, FileSpreadsheet, Image, Package, Loader2 } from 'lucide-react';
+import { Download, FileSpreadsheet, Image, Loader2, Table } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useSurveyStore } from '@/store/surveyStore';
-import { generateExcelReport } from '@/utils/excelWriter';
+import { generateFilePerQuestionari } from '@/utils/filePerQuestionariWriter';
+import { generateTabellaGrafici } from '@/utils/tabellaGraficiWriter';
 import { generateChartsZip } from '@/utils/chartExporter';
 import { toast } from '@/hooks/use-toast';
 
+type ExportType = 'file_per_questionari' | 'tabella_grafici' | 'charts' | null;
+
 export function DownloadBar() {
   const { parsedSurvey } = useSurveyStore();
-  const [isExporting, setIsExporting] = useState<'excel' | 'charts' | null>(null);
+  const [isExporting, setIsExporting] = useState<ExportType>(null);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
 
   if (!parsedSurvey) return null;
 
-  const handleExcelDownload = async () => {
-    setIsExporting('excel');
+  const handleFilePerQuestionariDownload = async () => {
+    setIsExporting('file_per_questionari');
     try {
-      await generateExcelReport(parsedSurvey);
+      await generateFilePerQuestionari(parsedSurvey);
       toast({
-        title: 'Report Excel generato',
-        description: 'Il file è stato scaricato con successo.',
+        title: 'File per Questionari generato',
+        description: 'Il file Excel è stato scaricato con successo.',
       });
     } catch (error) {
+      console.error('Error generating file_per_questionari:', error);
       toast({
         title: 'Errore',
-        description: 'Impossibile generare il report Excel.',
+        description: 'Impossibile generare il file Excel.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsExporting(null);
+    }
+  };
+
+  const handleTabellaGraficiDownload = async () => {
+    setIsExporting('tabella_grafici');
+    try {
+      await generateTabellaGrafici(parsedSurvey);
+      toast({
+        title: 'Tabella Grafici generata',
+        description: 'Il file Excel è stato scaricato con successo.',
+      });
+    } catch (error) {
+      console.error('Error generating tabella_grafici:', error);
+      toast({
+        title: 'Errore',
+        description: 'Impossibile generare la tabella grafici.',
         variant: 'destructive',
       });
     } finally {
@@ -35,7 +59,7 @@ export function DownloadBar() {
   const handleChartsDownload = async () => {
     setIsExporting('charts');
     setProgress({ current: 0, total: 0 });
-    
+
     try {
       await generateChartsZip(parsedSurvey, (current, total) => {
         setProgress({ current, total });
@@ -45,6 +69,7 @@ export function DownloadBar() {
         description: 'Il file ZIP è stato scaricato con successo.',
       });
     } catch (error) {
+      console.error('Error generating charts:', error);
       toast({
         title: 'Errore',
         description: 'Impossibile generare i grafici.',
@@ -67,28 +92,45 @@ export function DownloadBar() {
             Esporta Risultati
           </h3>
           <p className="text-sm text-muted-foreground">
-            Scarica il report Excel e i grafici PNG
+            Scarica i file Excel e i grafici PNG
           </p>
         </div>
 
         <div className="flex flex-wrap gap-3">
+          {/* File per Questionari Excel */}
           <Button
-            onClick={handleExcelDownload}
+            onClick={handleFilePerQuestionariDownload}
             disabled={isExporting !== null}
             className="gap-2"
           >
-            {isExporting === 'excel' ? (
+            {isExporting === 'file_per_questionari' ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
               <FileSpreadsheet className="w-4 h-4" />
             )}
-            Scarica Excel
+            File Questionari
           </Button>
 
+          {/* Tabella Grafici Excel */}
+          <Button
+            onClick={handleTabellaGraficiDownload}
+            disabled={isExporting !== null || scaleCount === 0}
+            variant="secondary"
+            className="gap-2"
+          >
+            {isExporting === 'tabella_grafici' ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Table className="w-4 h-4" />
+            )}
+            Tabella Grafici
+          </Button>
+
+          {/* Charts ZIP */}
           <Button
             onClick={handleChartsDownload}
             disabled={isExporting !== null || scaleCount === 0}
-            variant="secondary"
+            variant="outline"
             className="gap-2"
           >
             {isExporting === 'charts' ? (
@@ -103,7 +145,7 @@ export function DownloadBar() {
             ) : (
               <>
                 <Image className="w-4 h-4" />
-                Scarica Grafici ZIP
+                Grafici ZIP
               </>
             )}
           </Button>
