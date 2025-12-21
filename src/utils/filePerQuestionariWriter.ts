@@ -125,7 +125,7 @@ function createExportSheet(
   // Row 1: Cognome
   let currentRow = 1;
   const row1 = sheet.getRow(currentRow);
-  row1.getCell(1).value = { formula: 'LEFT(B1,SEARCH(" ",B1)-1)' }; // "Cognome" key
+  row1.getCell(1).value = { formula: 'IFERROR(LEFT(B1,SEARCH(" ",B1)-1),B1)' }; // "Cognome" key
   row1.getCell(2).value = 'Cognome';
   respondents.forEach((r, idx) => {
     const surname = r.originalData['Cognome'] || r.originalData['cognome'] || r.displayName.split(' ')[0] || '';
@@ -137,7 +137,7 @@ function createExportSheet(
   // Row 2: Nome
   currentRow = 2;
   const row2 = sheet.getRow(currentRow);
-  row2.getCell(1).value = { formula: 'LEFT(B2,SEARCH(" ",B2)-1)' }; // "Nome" key
+  row2.getCell(1).value = { formula: 'IFERROR(LEFT(B2,SEARCH(" ",B2)-1),B2)' }; // "Nome" key
   row2.getCell(2).value = 'Nome';
   respondents.forEach((r, idx) => {
     const nome = r.originalData['Nome'] || r.originalData['nome'] || r.displayName.split(' ').slice(1).join(' ') || '';
@@ -162,7 +162,7 @@ function createExportSheet(
     // Add block/page header row
     if (blockId !== null) {
       const pageRow = sheet.getRow(currentRow);
-      pageRow.getCell(1).value = { formula: `LEFT(B${currentRow},SEARCH(" ",B${currentRow})-1)` };
+      pageRow.getCell(1).value = { formula: `IFERROR(LEFT(B${currentRow},SEARCH(" ",B${currentRow})-1),B${currentRow})` };
       pageRow.getCell(2).value = `Page ${blockId}`;
       styleSectionRow(pageRow);
       pageRow.commit();
@@ -178,7 +178,7 @@ function createExportSheet(
         ? `${question.questionKey} ${question.questionText}`
         : question.questionText;
       
-      row.getCell(1).value = { formula: `LEFT(B${currentRow},SEARCH(" ",B${currentRow})-1)` };
+      row.getCell(1).value = { formula: `IFERROR(LEFT(B${currentRow},SEARCH(" ",B${currentRow})-1),B${currentRow})` };
       row.getCell(2).value = labelWithKey;
 
       // Columns C onwards: Respondent answers (raw values)
@@ -384,7 +384,7 @@ function createPersoneSheet(
       // Create the VLOOKUP formula
       // Searches for the field label (hardcoded) in Export!$B:$M and returns the respondent's value
       row.getCell(colNum).value = {
-        formula: `IFERROR(VLOOKUP("${fieldLabel}",Export!$B:$M,${returnColIndex},FALSE)," ")`
+        formula: `IFERROR(VLOOKUP("${fieldLabel}",Export!$B:$T,${returnColIndex},FALSE)," ")`
       };
     }
     row.commit();
@@ -413,7 +413,7 @@ function createEstrazioneGraficiSheet(
   exportRange: string,
   numRespondents: number
 ): void {
-  const sheet = workbook.addWorksheet('estrazione per grafici ');
+  const sheet = workbook.addWorksheet('estrazione per grafici');
   const respondents = survey.respondents;
 
   // Header row (values, not formulas)
@@ -460,7 +460,7 @@ function createEstrazioneGraficiSheet(
       const row = sheet.getRow(currentRow);
       
       // Column A: Key formula
-      row.getCell(1).value = { formula: `LEFT(B${currentRow},SEARCH(" ",B${currentRow})-1)` };
+      row.getCell(1).value = { formula: `IFERROR(LEFT(B${currentRow},SEARCH(" ",B${currentRow})-1),B${currentRow})` };
 
       // Column B: Question label with key prefix
       const labelWithKey = question.questionKey 
@@ -531,7 +531,7 @@ function createPerPdfSheet(
   exportRange: string,
   numRespondents: number
 ): void {
-  const sheet = workbook.addWorksheet('per pdf ');
+  const sheet = workbook.addWorksheet('per pdf');
 
   // Title area
   sheet.getRow(1).getCell(1).value = 'Riepilogo Survey';
@@ -589,7 +589,7 @@ function createPerPdfSheet(
     // Column G: INDEX formula to get value from Persone sheet
     // INDEX(Persone!1:1, H5) gets the value from row 1, column H5
     row.getCell(7).value = {
-      formula: `INDEX(Persone!${meta.personeRow}:${meta.personeRow},'per pdf '!$H$5)`
+      formula: `INDEX(Persone!${meta.personeRow}:${meta.personeRow},'per pdf'!$H$5)`
     };
     row.getCell(7).alignment = { horizontal: 'left' };
   });
@@ -638,7 +638,7 @@ function createPerPdfSheet(
       const row = sheet.getRow(currentRow);
       
       // Column A: Key (from column C which has the label)
-      row.getCell(1).value = { formula: `IFERROR(LEFT(B${currentRow},SEARCH(" ",B${currentRow})-1),"")` };
+      row.getCell(1).value = { formula: `IFERROR(LEFT(B${currentRow},SEARCH(" ",B${currentRow})-1),B${currentRow})` };
 
       // Column B: Question label
       const labelWithKey = question.questionKey 
@@ -650,7 +650,7 @@ function createPerPdfSheet(
       // Column C: MEDIE (reference to estrazione per grafici) - only for scale questions
       if (question.type === 'scale_1_10_na') {
         row.getCell(3).value = { 
-          formula: `IFERROR(VLOOKUP(A${currentRow},'estrazione per grafici '!$A:$C,3,FALSE),"")` 
+          formula: `IFERROR(VLOOKUP(A${currentRow},'estrazione per grafici'!$A:$C,3,FALSE),"")` 
         };
         row.getCell(3).font = { bold: true };
         row.getCell(3).fill = {
