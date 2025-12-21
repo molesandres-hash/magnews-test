@@ -1,4 +1,3 @@
-import Plotly from 'plotly.js-dist-min';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import type { ParsedSurvey, QuestionInfo, ScaleAnalytics } from '@/types/survey';
@@ -136,6 +135,9 @@ export async function generateChartsZip(
   const zip = new JSZip();
   const scaleQuestions = survey.questions.filter(q => q.type === 'scale_1_10_na');
   
+  // Dynamic import Plotly
+  const Plotly = await import('plotly.js-dist-min');
+  
   // Create a hidden div for rendering
   const container = document.createElement('div');
   container.style.position = 'absolute';
@@ -155,11 +157,11 @@ export async function generateChartsZip(
 
       const { data, layout } = getDistributionChartData(analytics, question);
       
-      await Plotly.newPlot(container, data, layout as Partial<Plotly.Layout>, { 
+      await Plotly.default.newPlot(container, data, layout as any, { 
         displayModeBar: false 
       });
       
-      const imageData = await Plotly.toImage(container, {
+      const imageData = await Plotly.default.toImage(container, {
         format: 'png',
         width: 1600,
         height: 900,
@@ -184,11 +186,11 @@ export async function generateChartsZip(
 
       const { data, layout } = getBlockSummaryChartData(blockId, questions, survey.scaleAnalytics);
       
-      await Plotly.newPlot(container, data, layout as Partial<Plotly.Layout>, { 
+      await Plotly.default.newPlot(container, data, layout as any, { 
         displayModeBar: false 
       });
       
-      const imageData = await Plotly.toImage(container, {
+      const imageData = await Plotly.default.toImage(container, {
         format: 'png',
         width: 1600,
         height: 900,
@@ -211,7 +213,7 @@ export async function generateChartsZip(
 
   } finally {
     // Cleanup
-    Plotly.purge(container);
+    Plotly.default.purge(container);
     document.body.removeChild(container);
   }
 }
