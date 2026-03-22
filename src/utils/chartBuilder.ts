@@ -5,29 +5,20 @@ import { useTemplateStore } from '@/store/templateStore';
 
 const SCALE_ORDER = ['10', '9', '8', '7', '6', '5', '4', '3', '2', '1', 'N/A'];
 
-/** Convert a mean value (1-10) to a fraction along the axis (0=first category, 1=last).
- *  SCALE_ORDER has 11 categories: '10'(idx 0) ... '1'(idx 9), 'N/A'(idx 10)
- *  Categorical index for mean = 10 - mean; fraction = index / 10 */
-function meanToAxisFraction(mean: number): number {
-  return Math.max(0, Math.min(1, (10 - mean) / 10));
-}
-
-/** Mean line for vertical bar charts — vertical line on the categorical X axis */
+/** Mean line for vertical bar charts — use the real mean value on the score axis */
 function meanLineVertical(analytics: ScaleAnalytics) {
-  const frac = meanToAxisFraction(analytics.mean);
   return {
-    type: 'line' as const, xref: 'paper' as const, yref: 'paper' as const,
-    x0: frac, x1: frac, y0: 0, y1: 1,
+    type: 'line' as const, xref: 'x' as const, yref: 'paper' as const,
+    x0: analytics.mean, x1: analytics.mean, y0: 0, y1: 1,
     line: { color: '#EF4444', width: 2, dash: 'dash' as const },
   };
 }
 
-/** Mean line for horizontal bar charts — horizontal line on the categorical Y axis */
+/** Mean line for horizontal bar charts — use the real mean value on the score axis */
 function meanLineHorizontal(analytics: ScaleAnalytics) {
-  const frac = meanToAxisFraction(analytics.mean);
   return {
-    type: 'line' as const, xref: 'paper' as const, yref: 'paper' as const,
-    x0: 0, x1: 1, y0: frac, y1: frac,
+    type: 'line' as const, xref: 'paper' as const, yref: 'y' as const,
+    x0: 0, x1: 1, y0: analytics.mean, y1: analytics.mean,
     line: { color: '#EF4444', width: 2, dash: 'dash' as const },
   };
 }
@@ -77,9 +68,9 @@ export function buildPlotlyConfig(
       return {
         data: [{
           type: 'bar', orientation: 'h',
-          y: SCALE_ORDER, x: values,
-          marker: { color: colors, line: { width: settings.barBorderWidth, color: '#1E293B' } },
-          text: showLabels ? values.map(String) : [],
+          y: [10, 9, 8, 7, 6, 5, 4, 3, 2, 1], x: values.slice(0, 10),
+          marker: { color: colors.slice(0, 10), line: { width: settings.barBorderWidth, color: '#1E293B' } },
+          text: showLabels ? values.slice(0, 10).map(String) : [],
           textposition: settings.dataLabelPosition === 'inside' ? 'inside' : 'outside',
         }],
         layout: {
@@ -87,7 +78,7 @@ export function buildPlotlyConfig(
           title: getTitle(question, fontFamily),
           annotations: [getSubtitle(analytics, fontFamily)],
           xaxis: { title: { text: 'Conteggio', font: { family: fontFamily } }, tickfont: { family: fontFamily }, showgrid: settings.showGridLines },
-          yaxis: { title: { text: 'Valutazione', font: { family: fontFamily } }, tickfont: { family: fontFamily } },
+          yaxis: { title: { text: 'Valutazione', font: { family: fontFamily } }, tickfont: { family: fontFamily }, range: [0.5, 10.5] },
           bargap: settings.barSpacing,
           shapes: settings.showMean ? [meanLineHorizontal(analytics)] : [],
         },
@@ -123,16 +114,16 @@ export function buildPlotlyConfig(
       return {
         data: [{
           type: 'bar',
-          x: SCALE_ORDER, y: values,
-          marker: { color: colors, line: { width: settings.barBorderWidth } },
-          text: showLabels ? values.map(String) : [],
+          x: [10, 9, 8, 7, 6, 5, 4, 3, 2, 1], y: values.slice(0, 10),
+          marker: { color: colors.slice(0, 10), line: { width: settings.barBorderWidth } },
+          text: showLabels ? values.slice(0, 10).map(String) : [],
           textposition: settings.dataLabelPosition === 'inside' ? 'inside' : 'outside',
         }],
         layout: {
           ...baseLayout,
           title: getTitle(question, fontFamily),
           annotations: [getSubtitle(analytics, fontFamily)],
-          xaxis: { title: { text: 'Valutazione', font: { family: fontFamily } }, tickfont: { family: fontFamily } },
+          xaxis: { title: { text: 'Valutazione', font: { family: fontFamily } }, tickfont: { family: fontFamily }, range: [0.5, 10.5] },
           yaxis: { title: { text: 'Conteggio', font: { family: fontFamily } }, tickfont: { family: fontFamily }, showgrid: settings.showGridLines },
           bargap: settings.barSpacing,
           shapes: [...shapes, ...(settings.showMean ? [meanLineVertical(analytics)] : [])],
@@ -290,16 +281,16 @@ export function buildPlotlyConfig(
       return {
         data: [{
           type: 'bar',
-          x: SCALE_ORDER, y: values,
-          marker: { color: colors, line: { width: settings.barBorderWidth, color: template?.accentColor || '#1E40AF' } },
-          text: showLabels ? values.map(String) : [],
+          x: [10, 9, 8, 7, 6, 5, 4, 3, 2, 1], y: values.slice(0, 10),
+          marker: { color: colors.slice(0, 10), line: { width: settings.barBorderWidth, color: template?.accentColor || '#1E40AF' } },
+          text: showLabels ? values.slice(0, 10).map(String) : [],
           textposition: settings.dataLabelPosition === 'inside' ? 'inside' : 'outside',
         }],
         layout: {
           ...baseLayout,
           title: getTitle(question, fontFamily),
           annotations: [getSubtitle(analytics, fontFamily)],
-          xaxis: { title: { text: 'Valutazione', font: { family: fontFamily } }, tickfont: { size: 11, family: fontFamily } },
+          xaxis: { title: { text: 'Valutazione', font: { family: fontFamily } }, tickfont: { size: 11, family: fontFamily }, range: [0.5, 10.5] },
           yaxis: { title: { text: 'Conteggio', font: { family: fontFamily } }, tickfont: { size: 11, family: fontFamily }, showgrid: settings.showGridLines },
           bargap: settings.barSpacing,
           shapes: settings.showMean ? [meanLineVertical(analytics)] : [],
