@@ -4,6 +4,8 @@ import type { ParsedSurvey, QuestionInfo, ScaleAnalytics } from '@/types/survey'
 import { groupQuestionsByBlock, getBlockDisplayName } from './analytics';
 import { getShortQuestionText } from './headerNormalizer';
 import { useTemplateStore } from '@/store/templateStore';
+import { useChartSettingsStore } from '@/store/chartSettingsStore';
+import { buildPlotlyConfig } from './chartBuilder';
 import { getTemplateChartColors, getTemplatePlotBg, getMeanBarColor } from './templateColors';
 
 const SCALE_ORDER = ['10', '9', '8', '7', '6', '5', '4', '3', '2', '1', 'N/A'];
@@ -24,29 +26,8 @@ function getTextColor(bgColor: string): string {
 }
 
 export function getDistributionChartData(analytics: ScaleAnalytics, question: QuestionInfo) {
-  const template = useTemplateStore.getState().getActiveTemplate();
-  const chartColors = getTemplateChartColors(template);
-  const plotBg = getTemplatePlotBg(template);
-  const fontFamily = template?.fontFamily || 'Arial';
-  const values = SCALE_ORDER.map(key => analytics.counts[key] || 0);
-
-  return {
-    data: [{
-      x: SCALE_ORDER, y: values, type: 'bar' as const,
-      marker: { color: chartColors, line: { color: template?.accentColor || '#1E40AF', width: 1 } },
-      text: values.map(v => v.toString()), textposition: 'outside' as const,
-    }],
-    layout: {
-      title: { text: `${question.questionKey || ''} - ${getShortQuestionText(question.questionText, 60)}`, font: { size: 16, color: '#1E293B', family: fontFamily } },
-      annotations: [{ x: 0.5, y: 1.08, xref: 'paper' as const, yref: 'paper' as const,
-        text: `Media: ${analytics.mean.toFixed(2)} | Risposte valide: ${analytics.validResponses}/${analytics.totalRespondents}`,
-        showarrow: false, font: { size: 12, color: '#64748B', family: fontFamily } }],
-      xaxis: { title: { text: 'Valutazione', font: { size: 12, family: fontFamily } }, tickfont: { size: 12, family: fontFamily } },
-      yaxis: { title: { text: 'Conteggio', font: { size: 12, family: fontFamily } }, tickfont: { size: 12, family: fontFamily } },
-      margin: { t: 80, r: 40, b: 60, l: 60 },
-      paper_bgcolor: '#FFFFFF', plot_bgcolor: plotBg,
-    },
-  };
+  const settings = useChartSettingsStore.getState().getEffectiveSettings(question.id);
+  return buildPlotlyConfig(analytics, question, settings);
 }
 
 export function getBlockSummaryChartData(
