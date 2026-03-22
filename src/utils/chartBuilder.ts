@@ -32,6 +32,25 @@ function meanLineHorizontal(analytics: ScaleAnalytics) {
   };
 }
 
+function getChartHeightPx(settings: ChartSettings): number {
+  if (settings.chartHeight === 'compact') return 280;
+  if (settings.chartHeight === 'tall') return 520;
+  return 380;
+}
+
+function getTitle(question: QuestionInfo, fontFamily: string) {
+  const text = `${question.questionKey || ''} - ${question.questionText.slice(0, 60)}${question.questionText.length > 60 ? '...' : ''}`;
+  return { text, font: { size: 14, color: '#1E293B', family: fontFamily } };
+}
+
+function getSubtitle(analytics: ScaleAnalytics, fontFamily: string) {
+  return {
+    x: 0.5, y: 1.12, xref: 'paper' as const, yref: 'paper' as const,
+    text: `Media: ${analytics.mean.toFixed(2)} | Risposte: ${analytics.validResponses}/${analytics.totalRespondents}`,
+    showarrow: false, font: { size: 11, color: '#64748B', family: fontFamily },
+  };
+}
+
 export function buildPlotlyConfig(
   analytics: ScaleAnalytics,
   question: QuestionInfo,
