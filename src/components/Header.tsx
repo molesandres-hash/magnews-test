@@ -1,6 +1,7 @@
 import { RotateCcw, FileSpreadsheet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useSurveyStore } from '@/store/surveyStore';
+import { TemplateManager } from '@/components/TemplateManager';
 
 export function Header() {
   const { parsedSurvey, reset } = useSurveyStore();
@@ -23,17 +24,20 @@ export function Header() {
             </div>
           </div>
 
-          {parsedSurvey && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={reset}
-              className="gap-2"
-            >
-              <RotateCcw className="w-4 h-4" />
-              Nuovo File
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            <TemplateManager />
+            {parsedSurvey && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={reset}
+                className="gap-2"
+              >
+                <RotateCcw className="w-4 h-4" />
+                Nuovo File
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     </header>

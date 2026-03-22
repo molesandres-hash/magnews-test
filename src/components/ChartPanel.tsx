@@ -1,31 +1,23 @@
 import { useMemo, useEffect, useRef } from 'react';
 import { useSurveyStore } from '@/store/surveyStore';
+import { useTemplateStore } from '@/store/templateStore';
+import { getTemplateChartColors, getTemplatePlotBg } from '@/utils/templateColors';
 import { BarChart3 } from 'lucide-react';
 
 const SCALE_ORDER = ['10', '9', '8', '7', '6', '5', '4', '3', '2', '1', 'N/A'];
-// Gradient colors: Green for high values, Yellow for mid, Orange/Red for low, Gray for N/A
-const CHART_COLORS = [
-  '#22C55E', '#22C55E', '#22C55E',  // 10, 9, 8 = Green (high)
-  '#84CC16',                         // 7 = Light green
-  '#FDE047', '#F59E0B',              // 6, 5 = Yellow/Orange (mid)
-  '#F97316', '#EF4444',              // 4, 3 = Orange/Red
-  '#DC2626', '#B91C1C',              // 2, 1 = Dark red (low)
-  '#94A3B8'                          // N/A = Gray
-];
 
 export function ChartPanel() {
   const { parsedSurvey, selectedQuestionId } = useSurveyStore();
+  const { getActiveTemplate } = useTemplateStore();
+  const template = getActiveTemplate();
   const chartRef = useRef<HTMLDivElement>(null);
 
   const chartData = useMemo(() => {
     if (!parsedSurvey || !selectedQuestionId) return null;
-
     const question = parsedSurvey.questions.find(q => q.id === selectedQuestionId);
     if (!question || question.type !== 'scale_1_10_na') return null;
-
     const analytics = parsedSurvey.scaleAnalytics.get(question.id);
     if (!analytics) return null;
-
     return { analytics, question };
   }, [parsedSurvey, selectedQuestionId]);
 
@@ -34,16 +26,18 @@ export function ChartPanel() {
 
     const { analytics, question } = chartData;
     const values = SCALE_ORDER.map(key => analytics.counts[key] || 0);
+    const chartColors = getTemplateChartColors(template);
+    const plotBg = getTemplatePlotBg(template);
+    const fontFamily = template?.fontFamily || 'Arial';
 
-    // Dynamic import for Plotly
     import('plotly.js-dist-min').then((Plotly) => {
       const data = [{
         x: SCALE_ORDER,
         y: values,
         type: 'bar' as const,
         marker: {
-          color: CHART_COLORS,
-          line: { color: '#1E40AF', width: 1 },
+          color: chartColors,
+          line: { color: template?.accentColor || '#1E40AF', width: 1 },
         },
         text: values.map(v => v.toString()),
         textposition: 'outside' as const,
@@ -52,30 +46,23 @@ export function ChartPanel() {
       const layout = {
         title: {
           text: `${question.questionKey || ''} - ${question.questionText.slice(0, 60)}${question.questionText.length > 60 ? '...' : ''}`,
-          font: { size: 14, color: '#1E293B' },
+          font: { size: 14, color: '#1E293B', family: fontFamily },
         },
         annotations: [{
-          x: 0.5,
-          y: 1.12,
-          xref: 'paper' as const,
-          yref: 'paper' as const,
+          x: 0.5, y: 1.12, xref: 'paper' as const, yref: 'paper' as const,
           text: `Media: ${analytics.mean.toFixed(2)} | Risposte: ${analytics.validResponses}/${analytics.totalRespondents}`,
-          showarrow: false,
-          font: { size: 11, color: '#64748B' },
+          showarrow: false, font: { size: 11, color: '#64748B', family: fontFamily },
         }],
-        xaxis: { title: { text: 'Valutazione' }, tickfont: { size: 11 } },
-        yaxis: { title: { text: 'Conteggio' }, tickfont: { size: 11 } },
+        xaxis: { title: { text: 'Valutazione', font: { family: fontFamily } }, tickfont: { size: 11, family: fontFamily } },
+        yaxis: { title: { text: 'Conteggio', font: { family: fontFamily } }, tickfont: { size: 11, family: fontFamily } },
         margin: { t: 80, r: 30, b: 50, l: 50 },
         paper_bgcolor: '#FFFFFF',
-        plot_bgcolor: '#F8FAFC',
+        plot_bgcolor: plotBg,
         autosize: true,
         height: 380,
       };
 
-      Plotly.default.newPlot(chartRef.current!, data, layout as any, {
-        displayModeBar: false,
-        responsive: true,
-      });
+      Plotly.default.newPlot(chartRef.current!, data, layout as any, { displayModeBar: false, responsive: true });
     });
 
     return () => {
@@ -85,7 +72,7 @@ export function ChartPanel() {
         });
       }
     };
-  }, [chartData]);
+  }, [chartData, template]);
 
   if (!parsedSurvey) return null;
 
@@ -95,9 +82,7 @@ export function ChartPanel() {
         <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
           <BarChart3 className="w-8 h-8 text-muted-foreground" />
         </div>
-        <h3 className="text-lg font-semibold text-foreground mb-2">
-          Seleziona una domanda scala
-        </h3>
+        <h3 className="text-lg font-semibold text-foreground mb-2">Seleziona una domanda scala</h3>
         <p className="text-sm text-muted-foreground max-w-sm">
           Clicca su una domanda di tipo "Scala 1-10" nella tabella per visualizzare il grafico della distribuzione.
         </p>
