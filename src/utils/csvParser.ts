@@ -318,6 +318,15 @@ function identifyQuestions(
       warnings.push(`Tipo di domanda non determinato per: "${normalized.cleanedHeader.slice(0, 50)}..."`);
     }
 
+    // Find the page name for this question by looking for the last "Page" header before this column
+    let pageName: string | undefined;
+    for (let p = pageNameByColIdx.length - 1; p >= 0; p--) {
+      if (pageNameByColIdx[p].colIdx < columnIdx) {
+        pageName = pageNameByColIdx[p].name;
+        break;
+      }
+    }
+
     questions.push({
       id: `q_${questions.length}`,
       rawHeader: headers[columnIdx],
@@ -330,6 +339,7 @@ function identifyQuestions(
       valueSource: valueSource as 'values' | 'labels' | 'unknown',
       valuesColumnIndex: columnIdx,
       labelsColumnIndex: group.labelsIdx,
+      pageName,
     });
   });
 
