@@ -14,7 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      company_templates: {
+        Row: {
+          accent_color: string
+          created_at: string
+          font_family: string
+          id: string
+          logo_base64: string | null
+          name: string
+          primary_color: string
+          secondary_color: string
+        }
+        Insert: {
+          accent_color?: string
+          created_at?: string
+          font_family?: string
+          id?: string
+          logo_base64?: string | null
+          name: string
+          primary_color?: string
+          secondary_color?: string
+        }
+        Update: {
+          accent_color?: string
+          created_at?: string
+          font_family?: string
+          id?: string
+          logo_base64?: string | null
+          name?: string
+          primary_color?: string
+          secondary_color?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

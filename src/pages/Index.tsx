@@ -8,11 +8,18 @@ import { ChartPanel } from '@/components/ChartPanel';
 import { DownloadBar } from '@/components/DownloadBar';
 import { WarningsPanel } from '@/components/WarningsPanel';
 import { useSurveyStore } from '@/store/surveyStore';
+import { useTemplateStore } from '@/store/templateStore';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { useEffect } from 'react';
 
 const Index = () => {
   const { parsedSurvey, isLoading, error } = useSurveyStore();
+  const fetchTemplates = useTemplateStore(s => s.fetchTemplates);
+
+  useEffect(() => {
+    fetchTemplates();
+  }, [fetchTemplates]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/30">

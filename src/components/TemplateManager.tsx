@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Settings, Plus, Pencil, Trash2, Save, X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Settings, Plus, Pencil, Trash2, Save, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -28,10 +28,17 @@ const defaultForm: TemplateFormData = {
 };
 
 export function TemplateManager() {
-  const { templates, activeTemplateId, addTemplate, updateTemplate, deleteTemplate, setActiveTemplateId } = useTemplateStore();
+  const { templates, activeTemplateId, addTemplate, updateTemplate, deleteTemplate, setActiveTemplateId, loading, fetchTemplates } = useTemplateStore();
   const [isEditing, setIsEditing] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<TemplateFormData>(defaultForm);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      fetchTemplates();
+    }
+  }, [open, fetchTemplates]);
 
   const handleSave = () => {
     if (!form.name.trim()) return;
@@ -71,7 +78,7 @@ export function TemplateManager() {
   };
 
   return (
-    <Sheet>
+    <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
         <Button variant="outline" size="sm" className="gap-2">
           <Settings className="w-4 h-4" />
@@ -116,7 +123,14 @@ export function TemplateManager() {
               )}
             </div>
 
-            {templates.length === 0 && !showForm && (
+            {loading && (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                <span className="ml-2 text-sm text-muted-foreground">Caricamento...</span>
+              </div>
+            )}
+
+            {!loading && templates.length === 0 && !showForm && (
               <p className="text-sm text-muted-foreground py-4 text-center">Nessun template salvato</p>
             )}
 
