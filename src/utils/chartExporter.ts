@@ -1,7 +1,7 @@
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import type { ParsedSurvey, QuestionInfo, ScaleAnalytics } from '@/types/survey';
-import { groupQuestionsByBlock, getBlockDisplayName } from './analytics';
+import { groupQuestionsByBlock, getBlockDisplayName, getSectionDisplayName } from './analytics';
 import { getShortQuestionText } from './headerNormalizer';
 import { useTemplateStore } from '@/store/templateStore';
 import { useChartSettingsStore } from '@/store/chartSettingsStore';
