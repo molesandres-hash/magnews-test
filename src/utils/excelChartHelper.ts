@@ -79,7 +79,7 @@ export async function generateBlockDistributionChartPNG(
   }));
 
   const layout = {
-    title: { text: `${getBlockDisplayName(blockId)} - Distribuzione`, font: { size: 14, family: fontFamily } },
+    title: { text: `${getSectionDisplayName(blockId, questions)} - Distribuzione`, font: { size: 14, family: fontFamily } },
     barmode: 'group',
     xaxis: { tickfont: { size: 9, family: fontFamily }, tickangle: -45 },
     yaxis: { title: { text: 'Conteggio', font: { family: fontFamily } } },
