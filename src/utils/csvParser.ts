@@ -267,6 +267,21 @@ function identifyQuestions(
     }
   });
 
+  // Filter out columns where >80% of non-empty respondent values are exactly 'x'
+  // These are MagNews metadata placeholder columns
+  headerGroups.forEach((group, baseKey) => {
+    const columnIdx = group.valuesIdx ?? group.labelsIdx;
+    if (columnIdx === undefined) return;
+    const values = respondents.map(r => r.originalData[headers[columnIdx]] || '');
+    const nonEmpty = values.filter(v => v.trim() !== '');
+    if (nonEmpty.length > 0) {
+      const xCount = nonEmpty.filter(v => v.trim().toLowerCase() === 'x').length;
+      if (xCount / nonEmpty.length > 0.8) {
+        headerGroups.delete(baseKey);
+      }
+    }
+  });
+
   // Process each unique question
   headerGroups.forEach((group, baseKey) => {
     // Skip if already processed or if it's just a labels column without values
