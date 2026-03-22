@@ -78,7 +78,7 @@ export function TemplateManager() {
   };
 
   return (
-    <Sheet>
+    <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
         <Button variant="outline" size="sm" className="gap-2">
           <Settings className="w-4 h-4" />
