@@ -299,7 +299,7 @@ function createPerPdfSheet(workbook: ExcelJS.Workbook, survey: ParsedSurvey, exp
   sortedBlocks.forEach(blockId => {
     const questions = grouped.get(blockId) || [];
     const blockRow = sheet.getRow(currentRow);
-    blockRow.getCell(1).value = ''; blockRow.getCell(2).value = getBlockDisplayName(blockId);
+    blockRow.getCell(1).value = ''; blockRow.getCell(2).value = getSectionDisplayName(blockId, questions);
     styleSectionRow(blockRow, fontName, sectionArgb); currentRow++;
 
     const sortedQuestions = [...questions].sort((a, b) => a.subId - b.subId);
