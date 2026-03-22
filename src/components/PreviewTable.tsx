@@ -76,7 +76,7 @@ export function PreviewTable() {
                   ) : (
                     <ChevronRight className="w-5 h-5 text-muted-foreground" />
                   )}
-                  <span className="font-semibold">{getBlockDisplayName(blockId)}</span>
+                  <span className="font-semibold">{getSectionDisplayName(blockId, questions)}</span>
                   <Badge variant="secondary" className="ml-auto">
                     {questions.length} domande
                   </Badge>
