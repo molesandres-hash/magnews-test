@@ -5,48 +5,29 @@ import { useTemplateStore } from '@/store/templateStore';
 
 const SCALE_ORDER = ['10', '9', '8', '7', '6', '5', '4', '3', '2', '1', 'N/A'];
 
-/** Convert a mean value (1-10) to a categorical axis position.
- *  SCALE_ORDER: '10'=0, '9'=1, ... '1'=9, 'N/A'=10
- *  So position = 10 - mean */
-function meanToAxisPos(mean: number): number {
-  return Math.max(0, Math.min(10, 10 - mean));
-}
-
-function getChartHeightPx(settings: ChartSettings): number {
-  if (settings.chartHeight === 'compact') return 280;
-  if (settings.chartHeight === 'tall') return 520;
-  return 380;
-}
-
-function getTitle(question: QuestionInfo, fontFamily: string) {
-  const text = `${question.questionKey || ''} - ${question.questionText.slice(0, 60)}${question.questionText.length > 60 ? '...' : ''}`;
-  return { text, font: { size: 14, color: '#1E293B', family: fontFamily } };
-}
-
-function getSubtitle(analytics: ScaleAnalytics, fontFamily: string) {
-  return {
-    x: 0.5, y: 1.12, xref: 'paper' as const, yref: 'paper' as const,
-    text: `Media: ${analytics.mean.toFixed(2)} | Risposte: ${analytics.validResponses}/${analytics.totalRespondents}`,
-    showarrow: false, font: { size: 11, color: '#64748B', family: fontFamily },
-  };
+/** Convert a mean value (1-10) to a fraction along the axis (0=first category, 1=last).
+ *  SCALE_ORDER has 11 categories: '10'(idx 0) ... '1'(idx 9), 'N/A'(idx 10)
+ *  Categorical index for mean = 10 - mean; fraction = index / 10 */
+function meanToAxisFraction(mean: number): number {
+  return Math.max(0, Math.min(1, (10 - mean) / 10));
 }
 
 /** Mean line for vertical bar charts — vertical line on the categorical X axis */
 function meanLineVertical(analytics: ScaleAnalytics) {
-  const pos = meanToAxisPos(analytics.mean);
+  const frac = meanToAxisFraction(analytics.mean);
   return {
-    type: 'line' as const, xref: 'x' as const, yref: 'paper' as const,
-    x0: pos, x1: pos, y0: 0, y1: 1,
+    type: 'line' as const, xref: 'paper' as const, yref: 'paper' as const,
+    x0: frac, x1: frac, y0: 0, y1: 1,
     line: { color: '#EF4444', width: 2, dash: 'dash' as const },
   };
 }
 
 /** Mean line for horizontal bar charts — horizontal line on the categorical Y axis */
 function meanLineHorizontal(analytics: ScaleAnalytics) {
-  const pos = meanToAxisPos(analytics.mean);
+  const frac = meanToAxisFraction(analytics.mean);
   return {
-    type: 'line' as const, xref: 'paper' as const, yref: 'y' as const,
-    x0: 0, x1: 1, y0: pos, y1: pos,
+    type: 'line' as const, xref: 'paper' as const, yref: 'paper' as const,
+    x0: 0, x1: 1, y0: frac, y1: frac,
     line: { color: '#EF4444', width: 2, dash: 'dash' as const },
   };
 }
