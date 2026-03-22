@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { ChevronDown, ChevronRight, BarChart3 } from 'lucide-react';
 import { useSurveyStore } from '@/store/surveyStore';
-import { filterQuestions, groupQuestionsByBlock, getBlockDisplayName } from '@/utils/analytics';
+import { filterQuestions, groupQuestionsByBlock, getSectionDisplayName } from '@/utils/analytics';
 import { getQuestionTypeLabel, getQuestionTypeColor } from '@/utils/questionClassifier';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
