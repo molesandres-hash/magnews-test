@@ -1,8 +1,10 @@
 import { useState } from 'react';
-import { Download, FileSpreadsheet, Image, Loader2, Table } from 'lucide-react';
+import { Download, FileSpreadsheet, Image, Loader2, Table, BarChart3, ImageIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useSurveyStore } from '@/store/surveyStore';
 import { useTemplateStore } from '@/store/templateStore';
 import { generateFilePerQuestionari } from '@/utils/filePerQuestionariWriter';
@@ -17,6 +19,7 @@ export function DownloadBar() {
   const { templates, activeTemplateId, setActiveTemplateId } = useTemplateStore();
   const [isExporting, setIsExporting] = useState<ExportType>(null);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
+  const [graficiMode, setGraficiMode] = useState<'native' | 'png'>('native');
 
   if (!parsedSurvey) return null;
 
@@ -34,7 +37,7 @@ export function DownloadBar() {
   const handleTabellaGraficiDownload = async () => {
     setIsExporting('tabella_grafici');
     try {
-      await generateTabellaGrafici(parsedSurvey);
+      await generateTabellaGrafici(parsedSurvey, graficiMode);
       toast({ title: 'Tabella Grafici generata', description: 'Il file Excel è stato scaricato con successo.' });
     } catch (error) {
       console.error('Error generating tabella_grafici:', error);
@@ -92,15 +95,48 @@ export function DownloadBar() {
             <p className="text-sm text-muted-foreground">Scarica i file Excel e i grafici PNG</p>
           </div>
 
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <Button onClick={handleFilePerQuestionariDownload} disabled={isExporting !== null} className="gap-2">
               {isExporting === 'file_per_questionari' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
               File Questionari
             </Button>
-            <Button onClick={handleTabellaGraficiDownload} disabled={isExporting !== null || scaleCount === 0} variant="secondary" className="gap-2">
-              {isExporting === 'tabella_grafici' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Table className="w-4 h-4" />}
-              Tabella Grafici
-            </Button>
+
+            {/* Tabella Grafici with mode toggle */}
+            <div className="flex items-center gap-2">
+              <Button onClick={handleTabellaGraficiDownload} disabled={isExporting !== null || scaleCount === 0} variant="secondary" className="gap-2">
+                {isExporting === 'tabella_grafici' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Table className="w-4 h-4" />}
+                Tabella Grafici
+              </Button>
+              <TooltipProvider delayDuration={200}>
+                <ToggleGroup
+                  type="single"
+                  variant="outline"
+                  value={graficiMode}
+                  onValueChange={(v) => { if (v) setGraficiMode(v as 'native' | 'png'); }}
+                  className="h-8"
+                >
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <ToggleGroupItem value="native" className="h-8 px-2 text-xs gap-1">
+                        <BarChart3 className="w-3.5 h-3.5" />
+                        Excel nativo
+                      </ToggleGroupItem>
+                    </TooltipTrigger>
+                    <TooltipContent>Grafici modificabili direttamente in Excel</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <ToggleGroupItem value="png" className="h-8 px-2 text-xs gap-1">
+                        <ImageIcon className="w-3.5 h-3.5" />
+                        PNG incorporati
+                      </ToggleGroupItem>
+                    </TooltipTrigger>
+                    <TooltipContent>Immagini ad alta risoluzione generate dall'app</TooltipContent>
+                  </Tooltip>
+                </ToggleGroup>
+              </TooltipProvider>
+            </div>
+
             <Button onClick={handleChartsDownload} disabled={isExporting !== null || scaleCount === 0} variant="outline" className="gap-2">
               {isExporting === 'charts' ? (
                 <><Loader2 className="w-4 h-4 animate-spin" />{progress.total > 0 && <span className="text-xs">{progress.current}/{progress.total}</span>}</>
