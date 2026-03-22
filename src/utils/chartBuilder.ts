@@ -5,6 +5,13 @@ import { useTemplateStore } from '@/store/templateStore';
 
 const SCALE_ORDER = ['10', '9', '8', '7', '6', '5', '4', '3', '2', '1', 'N/A'];
 
+/** Convert a mean value (1-10) to a categorical axis position.
+ *  SCALE_ORDER: '10'=0, '9'=1, ... '1'=9, 'N/A'=10
+ *  So position = 10 - mean */
+function meanToAxisPos(mean: number): number {
+  return Math.max(0, Math.min(10, 10 - mean));
+}
+
 function getChartHeightPx(settings: ChartSettings): number {
   if (settings.chartHeight === 'compact') return 280;
   if (settings.chartHeight === 'tall') return 520;
@@ -24,10 +31,22 @@ function getSubtitle(analytics: ScaleAnalytics, fontFamily: string) {
   };
 }
 
-function meanLine(analytics: ScaleAnalytics) {
+/** Mean line for vertical bar charts — vertical line on the categorical X axis */
+function meanLineVertical(analytics: ScaleAnalytics) {
+  const pos = meanToAxisPos(analytics.mean);
+  return {
+    type: 'line' as const, xref: 'x' as const, yref: 'paper' as const,
+    x0: pos, x1: pos, y0: 0, y1: 1,
+    line: { color: '#EF4444', width: 2, dash: 'dash' as const },
+  };
+}
+
+/** Mean line for horizontal bar charts — horizontal line on the categorical Y axis */
+function meanLineHorizontal(analytics: ScaleAnalytics) {
+  const pos = meanToAxisPos(analytics.mean);
   return {
     type: 'line' as const, xref: 'paper' as const, yref: 'y' as const,
-    x0: 0, x1: 1, y0: analytics.mean, y1: analytics.mean,
+    x0: 0, x1: 1, y0: pos, y1: pos,
     line: { color: '#EF4444', width: 2, dash: 'dash' as const },
   };
 }
@@ -70,7 +89,7 @@ export function buildPlotlyConfig(
           xaxis: { title: { text: 'Conteggio', font: { family: fontFamily } }, tickfont: { family: fontFamily }, showgrid: settings.showGridLines },
           yaxis: { title: { text: 'Valutazione', font: { family: fontFamily } }, tickfont: { family: fontFamily } },
           bargap: settings.barSpacing,
-          shapes: settings.showMean ? [{ ...meanLine(analytics), xref: 'x', yref: 'paper', x0: analytics.mean, x1: analytics.mean, y0: 0, y1: 1 }] : [],
+          shapes: settings.showMean ? [meanLineHorizontal(analytics)] : [],
         },
       };
     }
@@ -116,7 +135,7 @@ export function buildPlotlyConfig(
           xaxis: { title: { text: 'Valutazione', font: { family: fontFamily } }, tickfont: { family: fontFamily } },
           yaxis: { title: { text: 'Conteggio', font: { family: fontFamily } }, tickfont: { family: fontFamily }, showgrid: settings.showGridLines },
           bargap: settings.barSpacing,
-          shapes: [...shapes, ...(settings.showMean ? [meanLine(analytics)] : [])],
+          shapes: [...shapes, ...(settings.showMean ? [meanLineVertical(analytics)] : [])],
         },
       };
     }
@@ -283,7 +302,7 @@ export function buildPlotlyConfig(
           xaxis: { title: { text: 'Valutazione', font: { family: fontFamily } }, tickfont: { size: 11, family: fontFamily } },
           yaxis: { title: { text: 'Conteggio', font: { family: fontFamily } }, tickfont: { size: 11, family: fontFamily }, showgrid: settings.showGridLines },
           bargap: settings.barSpacing,
-          shapes: settings.showMean ? [meanLine(analytics)] : [],
+          shapes: settings.showMean ? [meanLineVertical(analytics)] : [],
         },
       };
     }
