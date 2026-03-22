@@ -35,6 +35,7 @@ function buildChartXml(chart: NativeChartDef): string {
     `<c:ser><c:idx val="${i}"/><c:order val="${i}"/>` +
     `<c:tx><c:v>${esc(s.name)}</c:v></c:tx>` +
     `<c:spPr><a:solidFill><a:srgbClr val="${s.color}"/></a:solidFill></c:spPr>` +
+    `<c:dLbls><c:showLegendKey val="0"/><c:showVal val="1"/><c:showCatName val="0"/><c:showSerName val="0"/><c:showPercent val="0"/><c:showBubbleSize val="0"/><c:numFmt formatCode="0.0" sourceLinked="0"/><c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="800"/></a:pPr><a:endParaRPr lang="it-IT"/></a:p></c:txPr></c:dLbls>` +
     `<c:cat><c:strRef><c:f>${esc(s.catRef)}</c:f></c:strRef></c:cat>` +
     `<c:val><c:numRef><c:f>${esc(s.valRef)}</c:f></c:numRef></c:val>` +
     `</c:ser>`
@@ -53,10 +54,10 @@ function buildChartXml(chart: NativeChartDef): string {
 <c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="it-IT" sz="1200" b="1"/><a:t>${esc(chart.title)}</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title>
 <c:autoTitleDeleted val="0"/>
 <c:plotArea><c:layout/>
-<c:barChart><c:barDir val="${dir}"/><c:grouping val="clustered"/><c:varyColors val="0"/>
+<c:barChart><c:barDir val="${dir}"/><c:grouping val="clustered"/><c:varyColors val="0"/><c:overlap val="-10"/>
 ${serXml}
 <c:axId val="111"/><c:axId val="222"/></c:barChart>
-<c:catAx><c:axId val="111"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="${catPos}"/><c:crossAx val="222"/></c:catAx>
+<c:catAx><c:axId val="111"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="${catPos}"/><c:crossAx val="222"/><c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="800"/></a:pPr><a:endParaRPr lang="it-IT"/></a:p></c:txPr></c:catAx>
 <c:valAx><c:axId val="222"/>${scaling}<c:delete val="0"/><c:axPos val="${valPos}"/><c:numFmt formatCode="0.0" sourceLinked="0"/><c:crossAx val="111"/><c:majorGridlines/></c:valAx>
 </c:plotArea>
 <c:legend><c:legendPos val="b"/></c:legend>
@@ -94,7 +95,6 @@ export async function injectNativeCharts(
   const zip = await JSZip.loadAsync(xlsxBuffer);
   let contentTypes = await zip.file('[Content_Types].xml')!.async('string');
 
-  // Group charts by sheet
   const bySheet = new Map<number, NativeChartDef[]>();
   for (const chart of charts) {
     const list = bySheet.get(chart.sheetIndex) || [];
@@ -111,7 +111,6 @@ export async function injectNativeCharts(
     let sheetXml = await zip.file(sheetFile)?.async('string');
     if (!sheetXml) continue;
 
-    // Check for existing drawing in sheet
     const existingDrawingMatch = sheetXml.match(/<drawing r:id="([^"]+)"/);
     let existingDrawingFile: string | null = null;
     let existingDrawingRelsFile: string | null = null;
@@ -130,7 +129,6 @@ export async function injectNativeCharts(
       }
     }
 
-    // Build chart files and anchor XML
     const anchorXmls: string[] = [];
     const chartRels: { rId: string; target: string }[] = [];
 
@@ -151,12 +149,10 @@ export async function injectNativeCharts(
     }
 
     if (existingDrawingFile) {
-      // Append to existing drawing
       let drawingXml = await zip.file(existingDrawingFile)!.async('string');
       drawingXml = drawingXml.replace('</xdr:wsDr>', anchorXmls.join('\n') + '\n</xdr:wsDr>');
       zip.file(existingDrawingFile, drawingXml);
 
-      // Update drawing rels
       let drawingRelsXml = await zip.file(existingDrawingRelsFile!)?.async('string') ||
         `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="${NS_REL}"></Relationships>`;
       for (const rel of chartRels) {
@@ -167,14 +163,12 @@ export async function injectNativeCharts(
       }
       zip.file(existingDrawingRelsFile!, drawingRelsXml);
     } else {
-      // Create new drawing
       const drawingNum = sheetIdx + 100;
       const drawingFile = `xl/drawings/drawing${drawingNum}.xml`;
       const drawingRelsFile = `xl/drawings/_rels/drawing${drawingNum}.xml.rels`;
 
       zip.file(drawingFile, buildDrawingXml(anchorXmls));
 
-      // Drawing rels
       let drawingRelsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="${NS_REL}">`;
       for (const rel of chartRels) {
         drawingRelsXml += `<Relationship Id="${rel.rId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="${rel.target}"/>`;
@@ -182,13 +176,11 @@ export async function injectNativeCharts(
       drawingRelsXml += '</Relationships>';
       zip.file(drawingRelsFile, drawingRelsXml);
 
-      // Content type for drawing
       contentTypes = contentTypes.replace(
         '</Types>',
         `<Override PartName="/${drawingFile}" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/></Types>`
       );
 
-      // Add drawing ref to sheet
       const drawingRId = `rIdDrw${drawingNum}`;
       let sheetRelsXml = await zip.file(sheetRelsFile)?.async('string') ||
         `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="${NS_REL}"></Relationships>`;
@@ -198,7 +190,6 @@ export async function injectNativeCharts(
       );
       zip.file(sheetRelsFile, sheetRelsXml);
 
-      // Add <drawing> to sheet XML — insert before </worksheet>
       sheetXml = sheetXml.replace('</worksheet>', `<drawing r:id="${drawingRId}"/></worksheet>`);
       zip.file(sheetFile, sheetXml);
     }

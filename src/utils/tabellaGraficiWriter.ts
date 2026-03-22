@@ -9,6 +9,7 @@ import { injectNativeCharts, type NativeChartDef } from './excelNativeCharts';
 
 const SCALE_ORDER = ['10', '9', '8', '7', '6', '5', '4', '3', '2', '1', 'N/A'];
 const COMITATO_PAGE_NAMES = ['Comitato 1', 'Comitato 2', 'Comitato 3'];
+const DIST_COLORS = ['2563EB', 'DC2626', '16A34A', 'D97706', '7C3AED', 'DB2777', '0891B2', '65A30D'];
 
 function colToLetter(col: number): string {
   let letter = '';
@@ -21,8 +22,15 @@ function colToLetter(col: number): string {
   return letter;
 }
 
-// Series colors for distribution charts (up to 8 distinct questions per section)
-const DIST_COLORS = ['2563EB', 'DC2626', '16A34A', 'D97706', '7C3AED', 'DB2777', '0891B2', '65A30D'];
+function cleanKey(raw: string | null): string {
+  if (!raw) return '';
+  return raw.replace(/^v/i, '').trim();
+}
+
+function extractGroupName(question: QuestionInfo): string | null {
+  const m = question.cleanedHeader.match(/^\d+[\.\t\s]+(.+?)\s*[-–]\s*\d+\.\d+/);
+  return m ? m[1].trim() : null;
+}
 
 export async function generateTabellaGrafici(
   survey: ParsedSurvey,
@@ -37,7 +45,6 @@ export async function generateTabellaGrafici(
   workbook.creator = 'Magnews Survey Analyzer';
   workbook.created = new Date();
 
-  // Riepilogo sheet (native mode only, created first so it appears first)
   let riepilogoSheet: ExcelJS.Worksheet | null = null;
   if (mode === 'native') {
     riepilogoSheet = workbook.addWorksheet('Riepilogo');
@@ -48,8 +55,9 @@ export async function generateTabellaGrafici(
   const scaleQuestions = survey.questions.filter(q => q.type === 'scale_1_10_na');
   const numRespondents = respondents.length;
 
-  const respondentStartCol = 3;
-  const respondentEndCol = 2 + numRespondents;
+  // New column layout: A=key, B=text, C=MEDIE, D+=respondents, then counts
+  const respondentStartCol = 4;
+  const respondentEndCol = 3 + numRespondents;
   const countStartCol = respondentEndCol + 1;
   const totalCols = countStartCol + SCALE_ORDER.length - 1;
 
@@ -66,8 +74,9 @@ export async function generateTabellaGrafici(
 
   // Header row
   const headerRow = sheet.getRow(1);
-  headerRow.getCell(1).value = 'Domanda';
-  headerRow.getCell(2).value = 'MEDIE';
+  headerRow.getCell(1).value = 'Chiave';
+  headerRow.getCell(2).value = 'Domanda';
+  headerRow.getCell(3).value = 'MEDIE';
   respondents.forEach((r, idx) => {
     const surname = r.originalData['Cognome'] || r.originalData['cognome'] || r.displayName.split(' ')[0] || r.displayName;
     headerRow.getCell(respondentStartCol + idx).value = surname;
@@ -105,7 +114,6 @@ export async function generateTabellaGrafici(
 
   const chartDefs: NativeChartDef[] = [];
   const sectionMeans: { name: string; mean: number }[] = [];
-  // Foglio1 sheet index: 2 if Riepilogo exists (native mode), else 1
   const foglio1SheetIndex = mode === 'native' ? 2 : 1;
 
   let currentRow = 2;
@@ -138,30 +146,64 @@ export async function generateTabellaGrafici(
         currentRow++;
       }
 
+      // Group sub-headers tracking
+      let lastGroupName: string | null = null;
       const dataStartRow = currentRow;
 
-      // Write question data rows
       for (const question of sortedQuestions) {
         const analytics = survey.scaleAnalytics.get(question.id);
         if (!analytics) continue;
 
-        const dataRow = sheet.getRow(currentRow);
-        dataRow.getCell(1).value = question.questionText;
-        dataRow.getCell(1).alignment = { wrapText: true, vertical: 'top' };
+        // Group sub-header
+        const groupName = extractGroupName(question);
+        if (groupName && groupName !== lastGroupName) {
+          lastGroupName = groupName;
+          const grpRow = sheet.getRow(currentRow);
+          sheet.mergeCells(currentRow, 1, currentRow, totalCols);
+          grpRow.getCell(1).value = `  ${groupName}`;
+          grpRow.getCell(1).font = { bold: true, size: 10, color: { argb: 'FF1E3A5F' }, name: fontName, italic: true };
+          grpRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E7FF' } };
+          grpRow.getCell(1).alignment = { horizontal: 'left' };
+          grpRow.height = 17;
+          grpRow.commit();
+          currentRow++;
+        }
 
-        dataRow.getCell(2).value = {
+        const dataRow = sheet.getRow(currentRow);
+
+        // Col A: question key
+        dataRow.getCell(1).value = cleanKey(question.questionKey);
+        dataRow.getCell(1).font = { bold: true, size: 9, color: { argb: 'FF2563EB' }, name: fontName };
+        dataRow.getCell(1).alignment = { horizontal: 'center' };
+
+        // Col B: clean question text
+        const displayText = question.questionText.length > 90
+          ? question.questionText.slice(0, 87) + '...'
+          : question.questionText;
+        dataRow.getCell(2).value = displayText;
+        dataRow.getCell(2).alignment = { wrapText: false, vertical: 'middle' };
+        dataRow.getCell(2).font = { size: 9, name: fontName };
+        if (question.questionText.length > 90) {
+          dataRow.getCell(2).note = { texts: [{ font: { size: 9 }, text: question.questionText }] };
+        }
+
+        // Col C: MEDIE formula
+        dataRow.getCell(3).value = {
           formula: `IFERROR(SUMIF(${firstRespColLetter}${currentRow}:${lastRespColLetter}${currentRow},">0")/COUNTIF(${firstRespColLetter}${currentRow}:${lastRespColLetter}${currentRow},">0")," ")`
         };
-        dataRow.getCell(2).alignment = { horizontal: 'center' };
-        dataRow.getCell(2).font = { bold: true, name: fontName };
-        dataRow.getCell(2).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } };
+        dataRow.getCell(3).alignment = { horizontal: 'center' };
+        dataRow.getCell(3).font = { bold: true, name: fontName };
+        dataRow.getCell(3).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } };
 
+        // Respondent values
         respondents.forEach((r, idx) => {
           const value = analytics.respondentValues[r.id];
           const cell = dataRow.getCell(respondentStartCol + idx);
-          if (value === null) {
-            cell.value = 'n.r.';
-            cell.font = { italic: true, color: { argb: 'FF888888' }, name: fontName };
+          if (value === null || value === undefined) {
+            cell.value = value === undefined ? '—' : 'n.r.';
+            cell.font = value === undefined
+              ? { color: { argb: 'FFCCCCCC' }, name: fontName }
+              : { italic: true, color: { argb: 'FF888888' }, name: fontName };
           } else {
             cell.value = value;
             if (value >= 8) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } };
@@ -171,6 +213,7 @@ export async function generateTabellaGrafici(
           cell.alignment = { horizontal: 'center' };
         });
 
+        // Count columns
         SCALE_ORDER.forEach((scaleVal, idx) => {
           const cell = dataRow.getCell(countStartCol + idx);
           if (scaleVal === 'N/A') {
@@ -182,6 +225,7 @@ export async function generateTabellaGrafici(
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F4F6' } };
         });
 
+        // Borders
         for (let i = 1; i <= totalCols; i++) {
           dataRow.getCell(i).border = {
             top: { style: 'thin', color: { argb: 'FFE5E7EB' } },
@@ -200,16 +244,14 @@ export async function generateTabellaGrafici(
       // Charts per section
       if (questionsWithAnalytics.length > 0) {
         if (mode === 'native') {
-          // Collect section mean for Riepilogo
-          const means = questionsWithAnalytics
-            .map(q => survey.scaleAnalytics.get(q.id)!.mean);
+          const means = questionsWithAnalytics.map(q => survey.scaleAnalytics.get(q.id)!.mean);
           const grandMean = means.reduce((a, b) => a + b, 0) / means.length;
           sectionMeans.push({ name: sectionName, mean: grandMean });
 
-          currentRow += 2; // gap
+          currentRow += 2;
           const meanChartRows = Math.max(15, questionsWithAnalytics.length * 2 + 5);
 
-          // Mean chart definition
+          // Mean chart — catRef=col B (short text), valRef=col C (MEDIE)
           chartDefs.push({
             sheetIndex: foglio1SheetIndex,
             sheetName: sheet.name,
@@ -218,8 +260,8 @@ export async function generateTabellaGrafici(
             anchor: { fromRow: currentRow - 1, fromCol: 0, toRow: currentRow + meanChartRows - 1, toCol: 13 },
             series: [{
               name: 'Media',
-              catRef: `'${sheet.name}'!$A$${dataStartRow}:$A$${dataEndRow}`,
-              valRef: `'${sheet.name}'!$B$${dataStartRow}:$B$${dataEndRow}`,
+              catRef: `'${sheet.name}'!$B$${dataStartRow}:$B$${dataEndRow}`,
+              valRef: `'${sheet.name}'!$C$${dataStartRow}:$C$${dataEndRow}`,
               color: template?.primaryColor?.replace('#', '') ?? '2563EB',
             }],
             valAxisMin: 0,
@@ -227,7 +269,7 @@ export async function generateTabellaGrafici(
           });
           currentRow += meanChartRows + 2;
 
-          // Distribution chart definition
+          // Distribution chart
           const distChartRows = 15;
           const cStartLetter = colToLetter(countStartCol);
           const cEndLetter = colToLetter(countStartCol + 10);
@@ -239,7 +281,7 @@ export async function generateTabellaGrafici(
             direction: 'vertical',
             anchor: { fromRow: currentRow - 1, fromCol: 0, toRow: currentRow + distChartRows - 1, toCol: 13 },
             series: questionsWithAnalytics.map((q, qIdx) => ({
-              name: q.questionKey ?? `Q${qIdx + 1}`,
+              name: cleanKey(q.questionKey) || `Q${qIdx + 1}`,
               catRef: `'${sheet.name}'!$${cStartLetter}$1:$${cEndLetter}$1`,
               valRef: `'${sheet.name}'!$${cStartLetter}$${dataStartRow + qIdx}:$${cEndLetter}$${dataStartRow + qIdx}`,
               color: DIST_COLORS[qIdx % DIST_COLORS.length],
@@ -269,12 +311,13 @@ export async function generateTabellaGrafici(
     }
   }
 
-  // Column widths
-  sheet.getColumn(1).width = 60;
-  sheet.getColumn(2).width = 10;
+  // Column widths — new layout
+  sheet.getColumn(1).width = 6;
+  sheet.getColumn(2).width = 52;
+  sheet.getColumn(3).width = 10;
   for (let i = respondentStartCol; i <= respondentEndCol; i++) sheet.getColumn(i).width = 14;
   for (let i = countStartCol; i <= totalCols; i++) sheet.getColumn(i).width = 6;
-  sheet.views = [{ state: 'frozen', xSplit: 0, ySplit: 1 }];
+  sheet.views = [{ state: 'frozen', xSplit: 2, ySplit: 1 }];
 
   // Riepilogo sheet content (native mode)
   if (mode === 'native' && riepilogoSheet && sectionMeans.length > 0) {
@@ -285,7 +328,6 @@ export async function generateTabellaGrafici(
     riepilogoSheet.getColumn(1).width = 40;
     riepilogoSheet.getColumn(2).width = 10;
 
-    // Hidden data at rows 100+
     const dataStart = 100;
     const noteRow = riepilogoSheet.getRow(dataStart - 1);
     noteRow.getCell(1).value = 'Dati riepilogo (non modificare)';
@@ -301,7 +343,7 @@ export async function generateTabellaGrafici(
     const dataEnd = dataStart + sectionMeans.length - 1;
 
     chartDefs.push({
-      sheetIndex: 1, // Riepilogo is the first sheet
+      sheetIndex: 1,
       sheetName: 'Riepilogo',
       title: 'Media per sezione',
       direction: 'horizontal',
@@ -320,7 +362,6 @@ export async function generateTabellaGrafici(
   // Write buffer
   const buffer = await workbook.xlsx.writeBuffer();
 
-  // Inject native charts if needed
   let finalBuffer: ArrayBuffer;
   if (mode === 'native' && chartDefs.length > 0) {
     try {
