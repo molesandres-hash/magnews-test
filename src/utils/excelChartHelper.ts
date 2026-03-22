@@ -1,6 +1,6 @@
 import type { QuestionInfo, ScaleAnalytics } from '@/types/survey';
 import type { CompanyTemplate } from '@/types/companyTemplate';
-import { getBlockDisplayName } from './analytics';
+import { getSectionDisplayName } from './analytics';
 import { getMeanBarColor } from './templateColors';
 
 const SCALE_ORDER = ['10', '9', '8', '7', '6', '5', '4', '3', '2', '1', 'N/A'];
@@ -39,7 +39,7 @@ export async function generateBlockMeanChartPNG(
   }];
 
   const layout = {
-    title: { text: getBlockDisplayName(blockId), font: { size: 16, family: fontFamily } },
+    title: { text: getSectionDisplayName(blockId, questions), font: { size: 16, family: fontFamily } },
     xaxis: { range: [0, 10], title: { text: 'Media', font: { family: fontFamily } }, tickfont: { family: fontFamily } },
     yaxis: { tickfont: { size: 10, family: fontFamily } },
     margin: { t: 50, r: 60, b: 50, l: 80 },
@@ -80,7 +80,7 @@ export async function generateBlockDistributionChartPNG(
   }));
 
   const layout = {
-    title: { text: `${getBlockDisplayName(blockId)} - Distribuzione`, font: { size: 14, family: fontFamily } },
+    title: { text: `${getSectionDisplayName(blockId, questions)} - Distribuzione`, font: { size: 14, family: fontFamily } },
     barmode: 'group',
     xaxis: { tickfont: { size: 9, family: fontFamily }, tickangle: -45 },
     yaxis: { title: { text: 'Conteggio', font: { family: fontFamily } } },

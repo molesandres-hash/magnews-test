@@ -1,7 +1,7 @@
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 import type { ParsedSurvey, QuestionInfo } from '@/types/survey';
-import { groupQuestionsByBlock, getBlockDisplayName } from './analytics';
+import { groupQuestionsByBlock, getSectionDisplayName } from './analytics';
 import { useTemplateStore } from '@/store/templateStore';
 import { hexToArgb } from './templateColors';
 import { generateBlockMeanChartPNG } from './excelChartHelper';
@@ -109,7 +109,7 @@ function createExportSheet(workbook: ExcelJS.Workbook, survey: ParsedSurvey, fon
     if (blockId !== null) {
       const pageRow = sheet.getRow(currentRow);
       pageRow.getCell(1).value = { formula: `IFERROR(LEFT(B${currentRow},SEARCH(" ",B${currentRow})-1),B${currentRow})` };
-      pageRow.getCell(2).value = `Page ${blockId}`;
+      pageRow.getCell(2).value = getSectionDisplayName(blockId, questions);
       styleSectionRow(pageRow, fontName, sectionArgb);
       pageRow.commit();
       currentRow++;
@@ -158,7 +158,7 @@ function createFoglio2Sheet(workbook: ExcelJS.Workbook, survey: ParsedSurvey, fo
     const questions = grouped.get(blockId) || [];
     if (blockId !== null) {
       const pageRow = sheet.getRow(currentRow);
-      pageRow.getCell(1).value = 'Page'; pageRow.getCell(2).value = `Page ${blockId}`;
+      pageRow.getCell(1).value = 'Page'; pageRow.getCell(2).value = getSectionDisplayName(blockId, questions);
       styleSectionRow(pageRow, fontName, sectionArgb); pageRow.commit(); currentRow++;
     }
     questions.forEach(question => {
@@ -219,7 +219,7 @@ function createEstrazioneGraficiSheet(workbook: ExcelJS.Workbook, survey: Parsed
   sortedBlocks.forEach(blockId => {
     const questions = grouped.get(blockId) || [];
     const blockRow = sheet.getRow(currentRow);
-    blockRow.getCell(1).value = ''; blockRow.getCell(2).value = getBlockDisplayName(blockId);
+    blockRow.getCell(1).value = ''; blockRow.getCell(2).value = getSectionDisplayName(blockId, questions);
     styleSectionRow(blockRow, fontName, sectionArgb); blockRow.commit(); currentRow++;
 
     const sortedQuestions = [...questions].sort((a, b) => a.subId - b.subId);
@@ -299,7 +299,7 @@ function createPerPdfSheet(workbook: ExcelJS.Workbook, survey: ParsedSurvey, exp
   sortedBlocks.forEach(blockId => {
     const questions = grouped.get(blockId) || [];
     const blockRow = sheet.getRow(currentRow);
-    blockRow.getCell(1).value = ''; blockRow.getCell(2).value = getBlockDisplayName(blockId);
+    blockRow.getCell(1).value = ''; blockRow.getCell(2).value = getSectionDisplayName(blockId, questions);
     styleSectionRow(blockRow, fontName, sectionArgb); currentRow++;
 
     const sortedQuestions = [...questions].sort((a, b) => a.subId - b.subId);
@@ -354,7 +354,7 @@ async function createGraficiSheet(workbook: ExcelJS.Workbook, survey: ParsedSurv
 
       // Block label
       const labelRow = sheet.getRow(currentRow);
-      labelRow.getCell(1).value = getBlockDisplayName(blockId);
+      labelRow.getCell(1).value = getSectionDisplayName(blockId, questions);
       labelRow.getCell(1).font = { bold: true, size: 14, name: fontName };
       labelRow.commit();
       currentRow++;

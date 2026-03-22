@@ -1,7 +1,7 @@
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import type { ParsedSurvey, QuestionInfo, ScaleAnalytics } from '@/types/survey';
-import { groupQuestionsByBlock, getBlockDisplayName } from './analytics';
+import { groupQuestionsByBlock, getBlockDisplayName, getSectionDisplayName } from './analytics';
 import { getShortQuestionText } from './headerNormalizer';
 import { useTemplateStore } from '@/store/templateStore';
 import { useChartSettingsStore } from '@/store/chartSettingsStore';
@@ -44,7 +44,7 @@ export function getBlockSummaryChartData(
     data: [{ x: labels, y: means, type: 'bar' as const, marker: { color: colors, line: { color: '#1E293B', width: 1 } },
       text: means.map(m => m.toFixed(2)), textposition: 'outside' as const }],
     layout: {
-      title: { text: `${getBlockDisplayName(blockId)} - Medie per domanda`, font: { size: 18, color: '#1E293B', family: fontFamily } },
+      title: { text: `${getSectionDisplayName(blockId, blockQuestions)} - Medie per domanda`, font: { size: 18, color: '#1E293B', family: fontFamily } },
       xaxis: { title: { text: 'Domanda', font: { size: 12, family: fontFamily } }, tickfont: { size: 10, family: fontFamily }, tickangle: -45 },
       yaxis: { title: { text: 'Media', font: { size: 12, family: fontFamily } }, range: [0, 10], tickfont: { size: 12, family: fontFamily } },
       margin: { t: 60, r: 40, b: 120, l: 60 },

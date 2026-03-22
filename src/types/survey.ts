@@ -24,6 +24,7 @@ export interface QuestionInfo {
   valueSource: 'values' | 'labels' | 'unknown';
   valuesColumnIndex: number;
   labelsColumnIndex?: number;
+  pageName?: string;
 }
 
 export interface Respondent {
