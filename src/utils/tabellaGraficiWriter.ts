@@ -1,10 +1,11 @@
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
-import type { ParsedSurvey } from '@/types/survey';
+import type { ParsedSurvey, QuestionInfo } from '@/types/survey';
 import { groupQuestionsByBlock, getSectionDisplayName } from './analytics';
 import { useTemplateStore } from '@/store/templateStore';
 import { hexToArgb } from './templateColors';
 import { generateBlockMeanChartPNG, generateBlockDistributionChartPNG } from './excelChartHelper';
+import { injectNativeCharts, type NativeChartDef } from './excelNativeCharts';
 
 const SCALE_ORDER = ['10', '9', '8', '7', '6', '5', '4', '3', '2', '1', 'N/A'];
 const COMITATO_PAGE_NAMES = ['Comitato 1', 'Comitato 2', 'Comitato 3'];
@@ -20,7 +21,13 @@ function colToLetter(col: number): string {
   return letter;
 }
 
-export async function generateTabellaGrafici(survey: ParsedSurvey): Promise<void> {
+// Series colors for distribution charts (up to 8 distinct questions per section)
+const DIST_COLORS = ['2563EB', 'DC2626', '16A34A', 'D97706', '7C3AED', 'DB2777', '0891B2', '65A30D'];
+
+export async function generateTabellaGrafici(
+  survey: ParsedSurvey,
+  mode: 'native' | 'png' = 'native'
+): Promise<void> {
   const template = useTemplateStore.getState().getActiveTemplate();
   const fontName = template?.fontFamily || 'Calibri';
   const headerArgb = template ? hexToArgb(template.primaryColor) : 'FF2563EB';
@@ -29,6 +36,12 @@ export async function generateTabellaGrafici(survey: ParsedSurvey): Promise<void
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'Magnews Survey Analyzer';
   workbook.created = new Date();
+
+  // Riepilogo sheet (native mode only, created first so it appears first)
+  let riepilogoSheet: ExcelJS.Worksheet | null = null;
+  if (mode === 'native') {
+    riepilogoSheet = workbook.addWorksheet('Riepilogo');
+  }
 
   const sheet = workbook.addWorksheet('Foglio1');
   const respondents = survey.respondents;
@@ -77,14 +90,23 @@ export async function generateTabellaGrafici(survey: ParsedSurvey): Promise<void
     return a - b;
   });
 
-  // Plotly setup for chart embedding
-  const Plotly = await import('plotly.js-dist-min');
-  const container = document.createElement('div');
-  container.style.position = 'absolute';
-  container.style.left = '-9999px';
-  container.style.width = '900px';
-  container.style.height = '500px';
-  document.body.appendChild(container);
+  // Plotly setup (PNG mode only)
+  let Plotly: any = null;
+  let container: HTMLDivElement | null = null;
+  if (mode === 'png') {
+    Plotly = await import('plotly.js-dist-min');
+    container = document.createElement('div');
+    container.style.position = 'absolute';
+    container.style.left = '-9999px';
+    container.style.width = '900px';
+    container.style.height = '500px';
+    document.body.appendChild(container);
+  }
+
+  const chartDefs: NativeChartDef[] = [];
+  const sectionMeans: { name: string; mean: number }[] = [];
+  // Foglio1 sheet index: 2 if Riepilogo exists (native mode), else 1
+  const foglio1SheetIndex = mode === 'native' ? 2 : 1;
 
   let currentRow = 2;
 
@@ -94,18 +116,16 @@ export async function generateTabellaGrafici(survey: ParsedSurvey): Promise<void
     for (const blockId of sortedBlocks) {
       const questions = grouped.get(blockId) || [];
       const sortedQuestions = [...questions].sort((a, b) => a.subId - b.subId);
-
-      // Determine if this block contains comitato questions that need visual separation
       const sectionName = getSectionDisplayName(blockId, questions);
       const isComitato = COMITATO_PAGE_NAMES.includes(sectionName);
 
-      // Add spacer + divider between comitato sections
+      // Spacer between comitato sections
       if (isComitato && lastSectionName && COMITATO_PAGE_NAMES.includes(lastSectionName)) {
         sheet.getRow(currentRow).height = 8;
         currentRow++;
       }
 
-      // Write section header only when section changes
+      // Section header (only when changes)
       if (sectionName !== lastSectionName) {
         lastSectionName = sectionName;
         const blockRow = sheet.getRow(currentRow);
@@ -118,6 +138,9 @@ export async function generateTabellaGrafici(survey: ParsedSurvey): Promise<void
         currentRow++;
       }
 
+      const dataStartRow = currentRow;
+
+      // Write question data rows
       for (const question of sortedQuestions) {
         const analytics = survey.scaleAnalytics.get(question.id);
         if (!analytics) continue;
@@ -171,24 +194,79 @@ export async function generateTabellaGrafici(survey: ParsedSurvey): Promise<void
         currentRow++;
       }
 
-      // Embed mean chart for this block
-      if (questions.length > 0) {
-        const meanPng = await generateBlockMeanChartPNG(blockId, questions, survey.scaleAnalytics, template, Plotly, container);
-        const meanChartHeight = Math.max(300, questions.length * 35 + 100);
-        const meanImageId = workbook.addImage({ base64: meanPng, extension: 'png' });
-        sheet.addImage(meanImageId, { tl: { col: 0, row: currentRow }, ext: { width: 900, height: meanChartHeight } });
-        currentRow += Math.ceil(meanChartHeight / 20) + 2;
+      const dataEndRow = currentRow - 1;
+      const questionsWithAnalytics = sortedQuestions.filter(q => survey.scaleAnalytics.get(q.id));
 
-        // Embed distribution chart
-        const distPng = await generateBlockDistributionChartPNG(blockId, questions, survey.scaleAnalytics, template, Plotly, container);
-        const distImageId = workbook.addImage({ base64: distPng, extension: 'png' });
-        sheet.addImage(distImageId, { tl: { col: 0, row: currentRow }, ext: { width: 900, height: 400 } });
-        currentRow += Math.ceil(400 / 20) + 2;
+      // Charts per section
+      if (questionsWithAnalytics.length > 0) {
+        if (mode === 'native') {
+          // Collect section mean for Riepilogo
+          const means = questionsWithAnalytics
+            .map(q => survey.scaleAnalytics.get(q.id)!.mean);
+          const grandMean = means.reduce((a, b) => a + b, 0) / means.length;
+          sectionMeans.push({ name: sectionName, mean: grandMean });
+
+          currentRow += 2; // gap
+          const meanChartRows = Math.max(15, questionsWithAnalytics.length * 2 + 5);
+
+          // Mean chart definition
+          chartDefs.push({
+            sheetIndex: foglio1SheetIndex,
+            sheetName: sheet.name,
+            title: sectionName,
+            direction: 'horizontal',
+            anchor: { fromRow: currentRow - 1, fromCol: 0, toRow: currentRow + meanChartRows - 1, toCol: 13 },
+            series: [{
+              name: 'Media',
+              catRef: `'${sheet.name}'!$A$${dataStartRow}:$A$${dataEndRow}`,
+              valRef: `'${sheet.name}'!$B$${dataStartRow}:$B$${dataEndRow}`,
+              color: template?.primaryColor?.replace('#', '') ?? '2563EB',
+            }],
+            valAxisMin: 0,
+            valAxisMax: 10,
+          });
+          currentRow += meanChartRows + 2;
+
+          // Distribution chart definition
+          const distChartRows = 15;
+          const cStartLetter = colToLetter(countStartCol);
+          const cEndLetter = colToLetter(countStartCol + 10);
+
+          chartDefs.push({
+            sheetIndex: foglio1SheetIndex,
+            sheetName: sheet.name,
+            title: `${sectionName} — Distribuzione`,
+            direction: 'vertical',
+            anchor: { fromRow: currentRow - 1, fromCol: 0, toRow: currentRow + distChartRows - 1, toCol: 13 },
+            series: questionsWithAnalytics.map((q, qIdx) => ({
+              name: q.questionKey ?? `Q${qIdx + 1}`,
+              catRef: `'${sheet.name}'!$${cStartLetter}$1:$${cEndLetter}$1`,
+              valRef: `'${sheet.name}'!$${cStartLetter}$${dataStartRow + qIdx}:$${cEndLetter}$${dataStartRow + qIdx}`,
+              color: DIST_COLORS[qIdx % DIST_COLORS.length],
+            })),
+          });
+          currentRow += distChartRows + 3;
+
+        } else {
+          // PNG mode (existing behavior)
+          const meanPng = await generateBlockMeanChartPNG(blockId, questions, survey.scaleAnalytics, template, Plotly, container!);
+          const meanChartHeight = Math.max(300, questions.length * 35 + 100);
+          const meanImageId = workbook.addImage({ base64: meanPng, extension: 'png' });
+          sheet.addImage(meanImageId, { tl: { col: 0, row: currentRow }, ext: { width: 900, height: meanChartHeight } });
+          currentRow += Math.ceil(meanChartHeight / 20) + 2;
+
+          const distPng = await generateBlockDistributionChartPNG(blockId, questions, survey.scaleAnalytics, template, Plotly, container!);
+          const distImageId = workbook.addImage({ base64: distPng, extension: 'png' });
+          sheet.addImage(distImageId, { tl: { col: 0, row: currentRow }, ext: { width: 900, height: 400 } });
+          currentRow += Math.ceil(400 / 20) + 2;
+        }
       }
     }
   } finally {
-    Plotly.default.purge(container);
-    document.body.removeChild(container);
+    if (mode === 'png' && Plotly && container) {
+      Plotly.default.purge(container);
+      document.body.removeChild(container);
+    }
   }
 
   // Column widths
@@ -198,7 +276,66 @@ export async function generateTabellaGrafici(survey: ParsedSurvey): Promise<void
   for (let i = countStartCol; i <= totalCols; i++) sheet.getColumn(i).width = 6;
   sheet.views = [{ state: 'frozen', xSplit: 0, ySplit: 1 }];
 
+  // Riepilogo sheet content (native mode)
+  if (mode === 'native' && riepilogoSheet && sectionMeans.length > 0) {
+    sectionMeans.sort((a, b) => b.mean - a.mean);
+
+    riepilogoSheet.getRow(1).getCell(1).value = `Media per sezione — ${survey.metadata.fileName.replace('.csv', '')}`;
+    riepilogoSheet.getRow(1).font = { bold: true, size: 14, name: fontName };
+    riepilogoSheet.getColumn(1).width = 40;
+    riepilogoSheet.getColumn(2).width = 10;
+
+    // Hidden data at rows 100+
+    const dataStart = 100;
+    const noteRow = riepilogoSheet.getRow(dataStart - 1);
+    noteRow.getCell(1).value = 'Dati riepilogo (non modificare)';
+    noteRow.getCell(1).font = { color: { argb: 'FF999999' }, size: 8, name: fontName };
+
+    sectionMeans.forEach((sm, i) => {
+      const row = riepilogoSheet!.getRow(dataStart + i);
+      row.getCell(1).value = sm.name;
+      row.getCell(2).value = Math.round(sm.mean * 100) / 100;
+      row.font = { color: { argb: 'FF999999' }, size: 9, name: fontName };
+    });
+
+    const dataEnd = dataStart + sectionMeans.length - 1;
+
+    chartDefs.push({
+      sheetIndex: 1, // Riepilogo is the first sheet
+      sheetName: 'Riepilogo',
+      title: 'Media per sezione',
+      direction: 'horizontal',
+      anchor: { fromRow: 2, fromCol: 0, toRow: 22, toCol: 10 },
+      series: [{
+        name: 'Media',
+        catRef: `'Riepilogo'!$A$${dataStart}:$A$${dataEnd}`,
+        valRef: `'Riepilogo'!$B$${dataStart}:$B$${dataEnd}`,
+        color: template?.primaryColor?.replace('#', '') ?? '2563EB',
+      }],
+      valAxisMin: 0,
+      valAxisMax: 10,
+    });
+  }
+
+  // Write buffer
   const buffer = await workbook.xlsx.writeBuffer();
-  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-  saveAs(blob, 'tabella_grafici_scala10_NA_GENERATA.xlsx');
+
+  // Inject native charts if needed
+  let finalBuffer: ArrayBuffer;
+  if (mode === 'native' && chartDefs.length > 0) {
+    try {
+      finalBuffer = await injectNativeCharts(buffer as ArrayBuffer, chartDefs);
+    } catch (e) {
+      console.warn('Native chart injection failed, saving without charts:', e);
+      finalBuffer = buffer as ArrayBuffer;
+    }
+  } else {
+    finalBuffer = buffer as ArrayBuffer;
+  }
+
+  const blob = new Blob([finalBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const fileName = mode === 'native'
+    ? `tabella_grafici_NATIVA_${survey.metadata.fileName.replace('.csv', '')}.xlsx`
+    : `tabella_grafici_PNG_${survey.metadata.fileName.replace('.csv', '')}.xlsx`;
+  saveAs(blob, fileName);
 }
