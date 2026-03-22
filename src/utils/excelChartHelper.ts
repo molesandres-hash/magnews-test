@@ -1,6 +1,7 @@
 import type { QuestionInfo, ScaleAnalytics } from '@/types/survey';
 import type { CompanyTemplate } from '@/types/companyTemplate';
 import { getSectionDisplayName } from './analytics';
+import { getMeanBarColor } from './templateColors';
 
 const SCALE_ORDER = ['10', '9', '8', '7', '6', '5', '4', '3', '2', '1', 'N/A'];
 const CHART_COLORS = [
