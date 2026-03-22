@@ -123,7 +123,14 @@ export function TemplateManager() {
               )}
             </div>
 
-            {templates.length === 0 && !showForm && (
+            {loading && (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                <span className="ml-2 text-sm text-muted-foreground">Caricamento...</span>
+              </div>
+            )}
+
+            {!loading && templates.length === 0 && !showForm && (
               <p className="text-sm text-muted-foreground py-4 text-center">Nessun template salvato</p>
             )}
 
