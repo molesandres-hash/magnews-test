@@ -31,10 +31,22 @@ function getSubtitle(analytics: ScaleAnalytics, fontFamily: string) {
   };
 }
 
-function meanLine(analytics: ScaleAnalytics) {
+/** Mean line for vertical bar charts — vertical line on the categorical X axis */
+function meanLineVertical(analytics: ScaleAnalytics) {
+  const pos = meanToAxisPos(analytics.mean);
+  return {
+    type: 'line' as const, xref: 'x' as const, yref: 'paper' as const,
+    x0: pos, x1: pos, y0: 0, y1: 1,
+    line: { color: '#EF4444', width: 2, dash: 'dash' as const },
+  };
+}
+
+/** Mean line for horizontal bar charts — horizontal line on the categorical Y axis */
+function meanLineHorizontal(analytics: ScaleAnalytics) {
+  const pos = meanToAxisPos(analytics.mean);
   return {
     type: 'line' as const, xref: 'paper' as const, yref: 'y' as const,
-    x0: 0, x1: 1, y0: analytics.mean, y1: analytics.mean,
+    x0: 0, x1: 1, y0: pos, y1: pos,
     line: { color: '#EF4444', width: 2, dash: 'dash' as const },
   };
 }
