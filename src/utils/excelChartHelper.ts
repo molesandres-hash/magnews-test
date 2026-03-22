@@ -38,7 +38,7 @@ export async function generateBlockMeanChartPNG(
   }];
 
   const layout = {
-    title: { text: getBlockDisplayName(blockId), font: { size: 16, family: fontFamily } },
+    title: { text: getSectionDisplayName(blockId, questions), font: { size: 16, family: fontFamily } },
     xaxis: { range: [0, 10], title: { text: 'Media', font: { family: fontFamily } }, tickfont: { family: fontFamily } },
     yaxis: { tickfont: { size: 10, family: fontFamily } },
     margin: { t: 50, r: 60, b: 50, l: 80 },
