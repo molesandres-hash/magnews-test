@@ -241,6 +241,20 @@ function identifyQuestions(
   const questions: QuestionInfo[] = [];
   const processedKeys = new Set<string>();
 
+  // Build a map of column index -> page name from "Page X" metadata headers
+  // Each "Page X" header marks the start of a section; questions after it belong to that page
+  const pageNameByColIdx: { colIdx: number; name: string }[] = [];
+  headers.forEach((header, idx) => {
+    const lower = header.toLowerCase().trim();
+    if (lower.startsWith('page ')) {
+      // Extract page name: everything after "Page " prefix
+      const name = header.trim().replace(/^page\s+/i, '').trim();
+      if (name) {
+        pageNameByColIdx.push({ colIdx: idx, name });
+      }
+    }
+  });
+
   // Group headers by their cleaned base (without values/labels suffix)
   const headerGroups = new Map<string, { valuesIdx?: number; labelsIdx?: number; rawHeader: string }>();
 
