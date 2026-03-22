@@ -135,7 +135,7 @@ export function buildPlotlyConfig(
           xaxis: { title: { text: 'Valutazione', font: { family: fontFamily } }, tickfont: { family: fontFamily } },
           yaxis: { title: { text: 'Conteggio', font: { family: fontFamily } }, tickfont: { family: fontFamily }, showgrid: settings.showGridLines },
           bargap: settings.barSpacing,
-          shapes: [...shapes, ...(settings.showMean ? [meanLine(analytics)] : [])],
+          shapes: [...shapes, ...(settings.showMean ? [meanLineVertical(analytics)] : [])],
         },
       };
     }
