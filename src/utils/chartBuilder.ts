@@ -68,9 +68,9 @@ export function buildPlotlyConfig(
       return {
         data: [{
           type: 'bar', orientation: 'h',
-          y: SCALE_ORDER, x: values,
-          marker: { color: colors, line: { width: settings.barBorderWidth, color: '#1E293B' } },
-          text: showLabels ? values.map(String) : [],
+          y: [10, 9, 8, 7, 6, 5, 4, 3, 2, 1], x: values.slice(0, 10),
+          marker: { color: colors.slice(0, 10), line: { width: settings.barBorderWidth, color: '#1E293B' } },
+          text: showLabels ? values.slice(0, 10).map(String) : [],
           textposition: settings.dataLabelPosition === 'inside' ? 'inside' : 'outside',
         }],
         layout: {
@@ -78,7 +78,7 @@ export function buildPlotlyConfig(
           title: getTitle(question, fontFamily),
           annotations: [getSubtitle(analytics, fontFamily)],
           xaxis: { title: { text: 'Conteggio', font: { family: fontFamily } }, tickfont: { family: fontFamily }, showgrid: settings.showGridLines },
-          yaxis: { title: { text: 'Valutazione', font: { family: fontFamily } }, tickfont: { family: fontFamily } },
+          yaxis: { title: { text: 'Valutazione', font: { family: fontFamily } }, tickfont: { family: fontFamily }, range: [0.5, 10.5] },
           bargap: settings.barSpacing,
           shapes: settings.showMean ? [meanLineHorizontal(analytics)] : [],
         },
