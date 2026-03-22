@@ -93,7 +93,7 @@ export async function generateTabellaGrafici(survey: ParsedSurvey): Promise<void
 
       // Block header
       const blockRow = sheet.getRow(currentRow);
-      blockRow.getCell(1).value = getBlockDisplayName(blockId);
+      blockRow.getCell(1).value = getSectionDisplayName(blockId, questions);
       blockRow.font = { bold: true, size: 12, name: fontName };
       blockRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: blockHeaderArgb } };
       blockRow.height = 28;

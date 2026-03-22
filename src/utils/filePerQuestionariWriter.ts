@@ -354,7 +354,7 @@ async function createGraficiSheet(workbook: ExcelJS.Workbook, survey: ParsedSurv
 
       // Block label
       const labelRow = sheet.getRow(currentRow);
-      labelRow.getCell(1).value = getBlockDisplayName(blockId);
+      labelRow.getCell(1).value = getSectionDisplayName(blockId, questions);
       labelRow.getCell(1).font = { bold: true, size: 14, name: fontName };
       labelRow.commit();
       currentRow++;
