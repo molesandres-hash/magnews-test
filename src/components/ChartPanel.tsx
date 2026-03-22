@@ -1,16 +1,19 @@
 import { useMemo, useEffect, useRef } from 'react';
 import { useSurveyStore } from '@/store/surveyStore';
-import { useTemplateStore } from '@/store/templateStore';
-import { getTemplateChartColors, getTemplatePlotBg } from '@/utils/templateColors';
-import { BarChart3 } from 'lucide-react';
+import { useChartSettingsStore } from '@/store/chartSettingsStore';
+import { buildPlotlyConfig } from '@/utils/chartBuilder';
+import { BarChart3, Palette } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { ChartSettingsPanel } from '@/components/ChartSettingsPanel';
+import { useState } from 'react';
 
 const SCALE_ORDER = ['10', '9', '8', '7', '6', '5', '4', '3', '2', '1', 'N/A'];
 
 export function ChartPanel() {
   const { parsedSurvey, selectedQuestionId } = useSurveyStore();
-  const { getActiveTemplate } = useTemplateStore();
-  const template = getActiveTemplate();
+  const { settings, getEffectiveSettings } = useChartSettingsStore();
   const chartRef = useRef<HTMLDivElement>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const chartData = useMemo(() => {
     if (!parsedSurvey || !selectedQuestionId) return null;
@@ -25,43 +28,10 @@ export function ChartPanel() {
     if (!chartData || !chartRef.current) return;
 
     const { analytics, question } = chartData;
-    const values = SCALE_ORDER.map(key => analytics.counts[key] || 0);
-    const chartColors = getTemplateChartColors(template);
-    const plotBg = getTemplatePlotBg(template);
-    const fontFamily = template?.fontFamily || 'Arial';
+    const effective = getEffectiveSettings(question.id);
+    const { data, layout } = buildPlotlyConfig(analytics, question, effective);
 
     import('plotly.js-dist-min').then((Plotly) => {
-      const data = [{
-        x: SCALE_ORDER,
-        y: values,
-        type: 'bar' as const,
-        marker: {
-          color: chartColors,
-          line: { color: template?.accentColor || '#1E40AF', width: 1 },
-        },
-        text: values.map(v => v.toString()),
-        textposition: 'outside' as const,
-      }];
-
-      const layout = {
-        title: {
-          text: `${question.questionKey || ''} - ${question.questionText.slice(0, 60)}${question.questionText.length > 60 ? '...' : ''}`,
-          font: { size: 14, color: '#1E293B', family: fontFamily },
-        },
-        annotations: [{
-          x: 0.5, y: 1.12, xref: 'paper' as const, yref: 'paper' as const,
-          text: `Media: ${analytics.mean.toFixed(2)} | Risposte: ${analytics.validResponses}/${analytics.totalRespondents}`,
-          showarrow: false, font: { size: 11, color: '#64748B', family: fontFamily },
-        }],
-        xaxis: { title: { text: 'Valutazione', font: { family: fontFamily } }, tickfont: { size: 11, family: fontFamily } },
-        yaxis: { title: { text: 'Conteggio', font: { family: fontFamily } }, tickfont: { size: 11, family: fontFamily } },
-        margin: { t: 80, r: 30, b: 50, l: 50 },
-        paper_bgcolor: '#FFFFFF',
-        plot_bgcolor: plotBg,
-        autosize: true,
-        height: 380,
-      };
-
       Plotly.default.newPlot(chartRef.current!, data, layout as any, { displayModeBar: false, responsive: true });
     });
 
@@ -72,7 +42,7 @@ export function ChartPanel() {
         });
       }
     };
-  }, [chartData, template]);
+  }, [chartData, settings]);
 
   if (!parsedSurvey) return null;
 
@@ -91,13 +61,19 @@ export function ChartPanel() {
   }
 
   return (
-    <div className="glass-card rounded-xl overflow-hidden animate-scale-in">
-      <div className="p-4 border-b border-border bg-muted/30">
+    <div className="glass-card rounded-xl overflow-hidden animate-scale-in relative">
+      <div className="p-4 border-b border-border bg-muted/30 flex items-center justify-between">
         <h3 className="font-semibold text-lg">Distribuzione Risposte</h3>
+        <Button variant="ghost" size="sm" onClick={() => setSettingsOpen(true)} className="gap-1.5">
+          <Palette className="w-4 h-4" />
+          <span className="hidden sm:inline text-xs">Personalizza</span>
+        </Button>
       </div>
       <div className="p-4">
-        <div ref={chartRef} style={{ width: '100%', height: '380px' }} />
+        <div ref={chartRef} style={{ width: '100%', height: settings.chartHeight === 'compact' ? '280px' : settings.chartHeight === 'tall' ? '520px' : '380px' }} />
       </div>
+
+      <ChartSettingsPanel open={settingsOpen} onOpenChange={setSettingsOpen} />
     </div>
   );
 }
