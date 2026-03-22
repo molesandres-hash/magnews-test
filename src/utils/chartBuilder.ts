@@ -89,7 +89,7 @@ export function buildPlotlyConfig(
           xaxis: { title: { text: 'Conteggio', font: { family: fontFamily } }, tickfont: { family: fontFamily }, showgrid: settings.showGridLines },
           yaxis: { title: { text: 'Valutazione', font: { family: fontFamily } }, tickfont: { family: fontFamily } },
           bargap: settings.barSpacing,
-          shapes: settings.showMean ? [{ ...meanLine(analytics), xref: 'x', yref: 'paper', x0: analytics.mean, x1: analytics.mean, y0: 0, y1: 1 }] : [],
+          shapes: settings.showMean ? [meanLineHorizontal(analytics)] : [],
         },
       };
     }
