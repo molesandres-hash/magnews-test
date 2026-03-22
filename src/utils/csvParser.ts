@@ -7,7 +7,11 @@ import { classifyQuestion, isNAValue, parseNumericValue } from './questionClassi
 const METADATA_COLUMNS = new Set([
   'id contact', 'id database', 'id survey', 'id session', 'test session',
   'status', 'ip address', 'start date', 'end date', 'data inizio', 'data fine',
-  'indirizzo ip', 'sessione di test', 'stato'
+  'indirizzo ip', 'sessione di test', 'stato',
+  // MagNews respondent metadata columns (appear at end of export)
+  'carica', 'surname', 'titolo',
+  'comitato1', 'comitato2', 'comitato3', 'comitato4', 'comitato5', 'comitato6',
+  'ruolo1', 'ruolo2', 'ruolo3', 'ruolo4', 'ruolo5', 'ruolo6',
 ]);
 
 /**
