@@ -39,6 +39,16 @@ export function getBlockDisplayName(blockId: number | null): string {
 }
 
 /**
+ * Get section display name from questions' pageName, falling back to "Sezione N"
+ */
+export function getSectionDisplayName(blockId: number | null, questions: QuestionInfo[]): string {
+  if (blockId === null) return 'Domande senza numerazione';
+  const firstWithName = questions.find(q => q.pageName);
+  if (firstWithName?.pageName) return firstWithName.pageName;
+  return `Sezione ${blockId}`;
+}
+
+/**
  * Calculate summary statistics for a block of scale questions
  */
 export function getBlockSummary(
