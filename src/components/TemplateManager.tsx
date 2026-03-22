@@ -28,10 +28,17 @@ const defaultForm: TemplateFormData = {
 };
 
 export function TemplateManager() {
-  const { templates, activeTemplateId, addTemplate, updateTemplate, deleteTemplate, setActiveTemplateId } = useTemplateStore();
+  const { templates, activeTemplateId, addTemplate, updateTemplate, deleteTemplate, setActiveTemplateId, loading, fetchTemplates } = useTemplateStore();
   const [isEditing, setIsEditing] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<TemplateFormData>(defaultForm);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      fetchTemplates();
+    }
+  }, [open, fetchTemplates]);
 
   const handleSave = () => {
     if (!form.name.trim()) return;
