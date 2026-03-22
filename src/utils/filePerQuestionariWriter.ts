@@ -109,7 +109,7 @@ function createExportSheet(workbook: ExcelJS.Workbook, survey: ParsedSurvey, fon
     if (blockId !== null) {
       const pageRow = sheet.getRow(currentRow);
       pageRow.getCell(1).value = { formula: `IFERROR(LEFT(B${currentRow},SEARCH(" ",B${currentRow})-1),B${currentRow})` };
-      pageRow.getCell(2).value = `Page ${blockId}`;
+      pageRow.getCell(2).value = getSectionDisplayName(blockId, questions);
       styleSectionRow(pageRow, fontName, sectionArgb);
       pageRow.commit();
       currentRow++;
