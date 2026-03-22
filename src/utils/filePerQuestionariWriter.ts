@@ -1,7 +1,7 @@
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 import type { ParsedSurvey, QuestionInfo } from '@/types/survey';
-import { groupQuestionsByBlock, getBlockDisplayName } from './analytics';
+import { groupQuestionsByBlock, getSectionDisplayName } from './analytics';
 import { useTemplateStore } from '@/store/templateStore';
 import { hexToArgb } from './templateColors';
 import { generateBlockMeanChartPNG } from './excelChartHelper';
