@@ -281,16 +281,16 @@ export function buildPlotlyConfig(
       return {
         data: [{
           type: 'bar',
-          x: SCALE_ORDER, y: values,
-          marker: { color: colors, line: { width: settings.barBorderWidth, color: template?.accentColor || '#1E40AF' } },
-          text: showLabels ? values.map(String) : [],
+          x: [10, 9, 8, 7, 6, 5, 4, 3, 2, 1], y: values.slice(0, 10),
+          marker: { color: colors.slice(0, 10), line: { width: settings.barBorderWidth, color: template?.accentColor || '#1E40AF' } },
+          text: showLabels ? values.slice(0, 10).map(String) : [],
           textposition: settings.dataLabelPosition === 'inside' ? 'inside' : 'outside',
         }],
         layout: {
           ...baseLayout,
           title: getTitle(question, fontFamily),
           annotations: [getSubtitle(analytics, fontFamily)],
-          xaxis: { title: { text: 'Valutazione', font: { family: fontFamily } }, tickfont: { size: 11, family: fontFamily } },
+          xaxis: { title: { text: 'Valutazione', font: { family: fontFamily } }, tickfont: { size: 11, family: fontFamily }, range: [0.5, 10.5] },
           yaxis: { title: { text: 'Conteggio', font: { family: fontFamily } }, tickfont: { size: 11, family: fontFamily }, showgrid: settings.showGridLines },
           bargap: settings.barSpacing,
           shapes: settings.showMean ? [meanLineVertical(analytics)] : [],
