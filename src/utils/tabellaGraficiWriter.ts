@@ -7,6 +7,7 @@ import { hexToArgb } from './templateColors';
 import { generateBlockMeanChartPNG, generateBlockDistributionChartPNG } from './excelChartHelper';
 
 const SCALE_ORDER = ['10', '9', '8', '7', '6', '5', '4', '3', '2', '1', 'N/A'];
+const COMITATO_PAGE_NAMES = ['Comitato 1', 'Comitato 2', 'Comitato 3'];
 
 function colToLetter(col: number): string {
   let letter = '';
@@ -88,20 +89,34 @@ export async function generateTabellaGrafici(survey: ParsedSurvey): Promise<void
   let currentRow = 2;
 
   try {
+    let lastSectionName: string | null = null;
+
     for (const blockId of sortedBlocks) {
       const questions = grouped.get(blockId) || [];
-
-      // Block header
-      const blockRow = sheet.getRow(currentRow);
-      blockRow.getCell(1).value = getSectionDisplayName(blockId, questions);
-      blockRow.font = { bold: true, size: 12, name: fontName };
-      blockRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: blockHeaderArgb } };
-      blockRow.height = 28;
-      sheet.mergeCells(currentRow, 1, currentRow, totalCols);
-      blockRow.commit();
-      currentRow++;
-
       const sortedQuestions = [...questions].sort((a, b) => a.subId - b.subId);
+
+      // Determine if this block contains comitato questions that need visual separation
+      const sectionName = getSectionDisplayName(blockId, questions);
+      const isComitato = COMITATO_PAGE_NAMES.includes(sectionName);
+
+      // Add spacer + divider between comitato sections
+      if (isComitato && lastSectionName && COMITATO_PAGE_NAMES.includes(lastSectionName)) {
+        sheet.getRow(currentRow).height = 8;
+        currentRow++;
+      }
+
+      // Write section header only when section changes
+      if (sectionName !== lastSectionName) {
+        lastSectionName = sectionName;
+        const blockRow = sheet.getRow(currentRow);
+        blockRow.getCell(1).value = sectionName;
+        blockRow.font = { bold: true, size: 12, name: fontName };
+        blockRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: blockHeaderArgb } };
+        blockRow.height = 28;
+        sheet.mergeCells(currentRow, 1, currentRow, totalCols);
+        blockRow.commit();
+        currentRow++;
+      }
 
       for (const question of sortedQuestions) {
         const analytics = survey.scaleAnalytics.get(question.id);
@@ -121,14 +136,22 @@ export async function generateTabellaGrafici(survey: ParsedSurvey): Promise<void
         respondents.forEach((r, idx) => {
           const value = analytics.respondentValues[r.id];
           const cell = dataRow.getCell(respondentStartCol + idx);
-          cell.value = value !== null ? value : 'N/A';
+          if (value === null) {
+            cell.value = 'n.r.';
+            cell.font = { italic: true, color: { argb: 'FF888888' }, name: fontName };
+          } else {
+            cell.value = value;
+            if (value >= 8) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } };
+            else if (value >= 5) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF3CD' } };
+            else cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
+          }
           cell.alignment = { horizontal: 'center' };
         });
 
         SCALE_ORDER.forEach((scaleVal, idx) => {
           const cell = dataRow.getCell(countStartCol + idx);
           if (scaleVal === 'N/A') {
-            cell.value = { formula: `COUNTIF(${firstRespColLetter}${currentRow}:${lastRespColLetter}${currentRow},"N/A")` };
+            cell.value = { formula: `COUNTIF(${firstRespColLetter}${currentRow}:${lastRespColLetter}${currentRow},"n.r.")` };
           } else {
             cell.value = { formula: `COUNTIF(${firstRespColLetter}${currentRow}:${lastRespColLetter}${currentRow},${scaleVal})` };
           }

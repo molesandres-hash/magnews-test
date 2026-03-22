@@ -6,6 +6,17 @@ import { useTemplateStore } from '@/store/templateStore';
 import { hexToArgb } from './templateColors';
 import { generateBlockMeanChartPNG } from './excelChartHelper';
 
+const COMITATO_PAGE_NAMES = ['Comitato 1', 'Comitato 2', 'Comitato 3'];
+
+function isComitato(q: QuestionInfo): boolean {
+  return COMITATO_PAGE_NAMES.includes(q.pageName ?? '');
+}
+
+function extractSubSection(question: QuestionInfo): string {
+  const match = question.cleanedHeader.match(/^\d+\.\s+([^-\d]+?)\s*[-–]\s*\d+/);
+  return match?.[1]?.trim() ?? '';
+}
+
 export async function generateFilePerQuestionari(survey: ParsedSurvey): Promise<void> {
   const template = useTemplateStore.getState().getActiveTemplate();
   const fontName = template?.fontFamily || 'Calibri';
@@ -20,13 +31,21 @@ export async function generateFilePerQuestionari(survey: ParsedSurvey): Promise<
   const numRespondents = respondents.length;
   const exportRange = 'Export!$A$1:$T$600';
 
-  const exportRowMap = createExportSheet(workbook, survey, fontName, headerArgb, sectionArgb, template?.logoBase64);
-  createFoglio2Sheet(workbook, survey, fontName, headerArgb, sectionArgb);
+  // Split questions: main (non-comitato) vs comitato
+  const mainQuestions = survey.questions.filter(q => !isComitato(q));
+  const comitato1 = survey.questions.filter(q => q.pageName === 'Comitato 1');
+  const comitato2 = survey.questions.filter(q => q.pageName === 'Comitato 2');
+  const comitato3 = survey.questions.filter(q => q.pageName === 'Comitato 3');
+
+  createExportSheet(workbook, survey, mainQuestions, fontName, headerArgb, sectionArgb, template?.logoBase64);
+
+  if (comitato1.length > 0) createComitatoSheet(workbook, survey, comitato1, 'Comitato 1', fontName, headerArgb, sectionArgb);
+  if (comitato2.length > 0) createComitatoSheet(workbook, survey, comitato2, 'Comitato 2', fontName, headerArgb, sectionArgb);
+  if (comitato3.length > 0) createComitatoSheet(workbook, survey, comitato3, 'Comitato 3', fontName, headerArgb, sectionArgb);
+
   createPersoneSheet(workbook, survey, exportRange);
   createEstrazioneGraficiSheet(workbook, survey, exportRange, numRespondents, fontName, headerArgb, sectionArgb);
   createPerPdfSheet(workbook, survey, exportRange, numRespondents, fontName, headerArgb, sectionArgb);
-
-  // Create "Grafici" sheet with embedded charts
   await createGraficiSheet(workbook, survey, template);
 
   const buffer = await workbook.xlsx.writeBuffer();
@@ -45,33 +64,67 @@ function colToLetter(col: number): string {
   return letter;
 }
 
-function getRespondentAnswer(survey: ParsedSurvey, question: QuestionInfo, respondentId: string): string | number {
-  switch (question.type) {
-    case 'scale_1_10_na': {
-      const analytics = survey.scaleAnalytics.get(question.id);
-      if (analytics) { const value = analytics.respondentValues[respondentId]; return value !== null ? value : 'N/A'; }
-      return '';
-    }
-    case 'open_text': {
-      const analytics = survey.openAnalytics.get(question.id);
-      if (analytics) { const response = analytics.responses.find(r => r.respondentId === respondentId); return response?.answer || '/'; }
-      return '';
-    }
-    case 'closed_single': case 'closed_binary': case 'closed_multi': {
-      const respondent = survey.respondents.find(r => r.id === respondentId);
-      if (respondent) { return respondent.originalData[question.rawHeader] || respondent.originalData[question.cleanedHeader] || '/'; }
-      return '';
-    }
-    default: return '';
+function formatCellValue(value: string | number | null | undefined, questionType: string): { display: string | number; style: 'numeric' | 'nr' | 'dash' | 'text' } {
+  if (value === undefined) return { display: '—', style: 'dash' };
+  if (value === null || value === 'N/A') return { display: 'n.r.', style: 'nr' };
+  if (typeof value === 'number') return { display: value, style: 'numeric' };
+  if (typeof value === 'string') {
+    if (value.trim().toLowerCase() === 'n/a') return { display: 'n.r.', style: 'nr' };
+    if (value === '/' || value.trim() === '') return { display: '—', style: 'dash' };
+  }
+  return { display: value, style: 'text' };
+}
+
+function applyCellStyle(cell: ExcelJS.Cell, formatted: { display: string | number; style: string }, fontName: string): void {
+  cell.value = formatted.display;
+  cell.alignment = { horizontal: formatted.style === 'text' ? 'left' : 'center' };
+
+  if (formatted.style === 'numeric' && typeof formatted.display === 'number') {
+    const n = formatted.display;
+    if (n >= 8) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } };
+    else if (n >= 5) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF3CD' } };
+    else cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
+  } else if (formatted.style === 'nr') {
+    cell.font = { italic: true, color: { argb: 'FF888888' }, name: fontName };
+  } else if (formatted.style === 'dash') {
+    cell.font = { color: { argb: 'FFCCCCCC' }, name: fontName };
   }
 }
 
-function createExportSheet(workbook: ExcelJS.Workbook, survey: ParsedSurvey, fontName: string, headerArgb: string, sectionArgb: string, logoBase64?: string): Map<string, number> {
+function getRespondentAnswer(survey: ParsedSurvey, question: QuestionInfo, respondentId: string): string | number | null {
+  switch (question.type) {
+    case 'scale_1_10_na': {
+      const analytics = survey.scaleAnalytics.get(question.id);
+      if (analytics) {
+        const value = analytics.respondentValues[respondentId];
+        return value !== null ? value : null;
+      }
+      return null;
+    }
+    case 'open_text': {
+      const analytics = survey.openAnalytics.get(question.id);
+      if (analytics) {
+        const response = analytics.responses.find(r => r.respondentId === respondentId);
+        return response?.answer || null;
+      }
+      return null;
+    }
+    case 'closed_single': case 'closed_binary': case 'closed_multi': {
+      const respondent = survey.respondents.find(r => r.id === respondentId);
+      if (respondent) {
+        const val = respondent.originalData[question.rawHeader] || respondent.originalData[question.cleanedHeader];
+        return val || null;
+      }
+      return null;
+    }
+    default: return null;
+  }
+}
+
+function createExportSheet(workbook: ExcelJS.Workbook, survey: ParsedSurvey, questions: QuestionInfo[], fontName: string, headerArgb: string, sectionArgb: string, logoBase64?: string): void {
   const sheet = workbook.addWorksheet('Export');
   const respondents = survey.respondents;
-  const rowMap = new Map<string, number>();
 
-  // Logo
   if (logoBase64) {
     const logoData = logoBase64.replace(/^data:image\/(png|jpeg|jpg);base64,/, '');
     const ext = logoBase64.includes('image/png') ? 'png' : 'jpeg';
@@ -101,37 +154,109 @@ function createExportSheet(workbook: ExcelJS.Workbook, survey: ParsedSurvey, fon
   row2.commit();
 
   currentRow = 3;
-  const grouped = groupQuestionsByBlock(survey.questions);
+  const grouped = groupQuestionsByBlock(questions);
   const sortedBlocks = Array.from(grouped.keys()).sort((a, b) => { if (a === null) return 1; if (b === null) return -1; return a - b; });
 
+  let lastSectionName: string | null = null;
+
   sortedBlocks.forEach(blockId => {
-    const questions = grouped.get(blockId) || [];
-    if (blockId !== null) {
-      const pageRow = sheet.getRow(currentRow);
-      pageRow.getCell(1).value = { formula: `IFERROR(LEFT(B${currentRow},SEARCH(" ",B${currentRow})-1),B${currentRow})` };
-      pageRow.getCell(2).value = getSectionDisplayName(blockId, questions);
-      styleSectionRow(pageRow, fontName, sectionArgb);
-      pageRow.commit();
-      currentRow++;
-    }
-    questions.forEach(question => {
+    const blockQuestions = grouped.get(blockId) || [];
+    const sortedQs = [...blockQuestions].sort((a, b) => a.subId - b.subId);
+
+    sortedQs.forEach(question => {
+      const sectionName = question.pageName ?? getSectionDisplayName(blockId, blockQuestions);
+
+      if (sectionName !== lastSectionName) {
+        lastSectionName = sectionName;
+        const pageRow = sheet.getRow(currentRow);
+        pageRow.getCell(1).value = { formula: `IFERROR(LEFT(B${currentRow},SEARCH(" ",B${currentRow})-1),B${currentRow})` };
+        pageRow.getCell(2).value = sectionName;
+        styleSectionRow(pageRow, fontName, sectionArgb);
+        pageRow.commit();
+        currentRow++;
+      }
+
       const row = sheet.getRow(currentRow);
-      const labelWithKey = question.questionKey ? `${question.questionKey} ${question.questionText}` : question.questionText;
       row.getCell(1).value = { formula: `IFERROR(LEFT(B${currentRow},SEARCH(" ",B${currentRow})-1),B${currentRow})` };
-      row.getCell(2).value = labelWithKey;
-      respondents.forEach((r, idx) => { row.getCell(3 + idx).value = getRespondentAnswer(survey, question, r.id); });
+      row.getCell(2).value = question.questionKey
+        ? `${question.questionKey} ${question.questionText.length > 100 ? question.questionText.slice(0, 97) + '...' : question.questionText}`
+        : question.questionText;
+
+      respondents.forEach((r, idx) => {
+        const val = getRespondentAnswer(survey, question, r.id);
+        const formatted = formatCellValue(val, question.type);
+        applyCellStyle(row.getCell(3 + idx), formatted, fontName);
+      });
+
       row.commit();
-      if (question.questionKey) rowMap.set(question.questionKey, currentRow);
-      rowMap.set(question.id, currentRow);
       currentRow++;
     });
   });
 
-  sheet.getColumn(1).width = 10;
-  sheet.getColumn(2).width = 80;
-  for (let i = 3; i <= 2 + respondents.length; i++) sheet.getColumn(i).width = 18;
+  sheet.getColumn(1).width = 8;
+  sheet.getColumn(2).width = 55;
+  for (let i = 3; i <= 2 + respondents.length; i++) sheet.getColumn(i).width = 12;
   sheet.views = [{ state: 'frozen', xSplit: 2, ySplit: 2 }];
-  return rowMap;
+}
+
+function createComitatoSheet(workbook: ExcelJS.Workbook, survey: ParsedSurvey, questions: QuestionInfo[], sheetName: string, fontName: string, headerArgb: string, _sectionArgb: string): void {
+  const sheet = workbook.addWorksheet(sheetName.slice(0, 31));
+  const respondents = survey.respondents;
+  const subSectionArgb = 'FF93C5FD';
+  const subSectionTextArgb = 'FF1E3A5F';
+
+  let currentRow = 1;
+  // Header row
+  const hdr = sheet.getRow(currentRow);
+  hdr.getCell(1).value = 'Chiave';
+  hdr.getCell(2).value = 'Domanda';
+  respondents.forEach((r, idx) => {
+    hdr.getCell(3 + idx).value = r.originalData['Cognome'] || r.originalData['cognome'] || r.displayName.split(' ')[0] || '';
+  });
+  styleHeaderRow(hdr, fontName, headerArgb);
+  hdr.commit();
+  currentRow++;
+
+  // Group by sub-section
+  const sortedQs = [...questions].sort((a, b) => a.subId - b.subId);
+  let lastSubSection: string | null = null;
+
+  for (const question of sortedQs) {
+    const subSection = extractSubSection(question);
+
+    if (subSection && subSection !== lastSubSection) {
+      lastSubSection = subSection;
+      const subRow = sheet.getRow(currentRow);
+      subRow.getCell(1).value = '';
+      subRow.getCell(2).value = subSection;
+      subRow.font = { bold: true, color: { argb: subSectionTextArgb }, name: fontName };
+      subRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: subSectionArgb } };
+      subRow.height = 18;
+      subRow.commit();
+      currentRow++;
+    }
+
+    const row = sheet.getRow(currentRow);
+    row.getCell(1).value = question.questionKey ?? '';
+    row.getCell(2).value = question.questionText.length > 100
+      ? question.questionText.slice(0, 97) + '...'
+      : question.questionText;
+    row.getCell(2).alignment = { wrapText: true, vertical: 'top' };
+
+    respondents.forEach((r, idx) => {
+      const val = getRespondentAnswer(survey, question, r.id);
+      const formatted = formatCellValue(val, question.type);
+      applyCellStyle(row.getCell(3 + idx), formatted, fontName);
+    });
+
+    row.commit();
+    currentRow++;
+  }
+
+  sheet.getColumn(1).width = 8;
+  sheet.getColumn(2).width = 55;
+  for (let i = 3; i <= 2 + respondents.length; i++) sheet.getColumn(i).width = 12;
+  sheet.views = [{ state: 'frozen', xSplit: 1, ySplit: 1 }];
 }
 
 function createFoglio2Sheet(workbook: ExcelJS.Workbook, survey: ParsedSurvey, fontName: string, headerArgb: string, sectionArgb: string): void {
@@ -154,25 +279,42 @@ function createFoglio2Sheet(workbook: ExcelJS.Workbook, survey: ParsedSurvey, fo
   const grouped = groupQuestionsByBlock(survey.questions);
   const sortedBlocks = Array.from(grouped.keys()).sort((a, b) => { if (a === null) return 1; if (b === null) return -1; return a - b; });
 
+  let lastSectionName: string | null = null;
+
   sortedBlocks.forEach(blockId => {
-    const questions = grouped.get(blockId) || [];
-    if (blockId !== null) {
-      const pageRow = sheet.getRow(currentRow);
-      pageRow.getCell(1).value = 'Page'; pageRow.getCell(2).value = getSectionDisplayName(blockId, questions);
-      styleSectionRow(pageRow, fontName, sectionArgb); pageRow.commit(); currentRow++;
-    }
-    questions.forEach(question => {
+    const blockQuestions = grouped.get(blockId) || [];
+    const sortedQs = [...blockQuestions].sort((a, b) => a.subId - b.subId);
+
+    sortedQs.forEach(question => {
+      const sectionName = question.pageName ?? getSectionDisplayName(blockId, blockQuestions);
+
+      if (sectionName !== lastSectionName) {
+        lastSectionName = sectionName;
+        const pageRow = sheet.getRow(currentRow);
+        pageRow.getCell(1).value = 'Page';
+        pageRow.getCell(2).value = sectionName;
+        styleSectionRow(pageRow, fontName, sectionArgb);
+        pageRow.commit();
+        currentRow++;
+      }
+
       const row = sheet.getRow(currentRow);
-      const labelWithKey = question.questionKey ? `${question.questionKey} ${question.questionText}` : question.questionText;
       row.getCell(1).value = question.questionKey || '';
-      row.getCell(2).value = labelWithKey;
-      respondents.forEach((r, idx) => { row.getCell(3 + idx).value = getRespondentAnswer(survey, question, r.id); });
-      row.commit(); currentRow++;
+      row.getCell(2).value = question.questionKey
+        ? `${question.questionKey} ${question.questionText}`
+        : question.questionText;
+      respondents.forEach((r, idx) => {
+        const val = getRespondentAnswer(survey, question, r.id);
+        const formatted = formatCellValue(val, question.type);
+        applyCellStyle(row.getCell(3 + idx), formatted, fontName);
+      });
+      row.commit();
+      currentRow++;
     });
   });
 
-  sheet.getColumn(1).width = 10; sheet.getColumn(2).width = 80;
-  for (let i = 3; i <= 2 + respondents.length; i++) sheet.getColumn(i).width = 18;
+  sheet.getColumn(1).width = 8; sheet.getColumn(2).width = 55;
+  for (let i = 3; i <= 2 + respondents.length; i++) sheet.getColumn(i).width = 12;
 }
 
 function createPersoneSheet(workbook: ExcelJS.Workbook, survey: ParsedSurvey, exportRange: string): void {
@@ -216,18 +358,30 @@ function createEstrazioneGraficiSheet(workbook: ExcelJS.Workbook, survey: Parsed
   const grouped = groupQuestionsByBlock(survey.questions);
   const sortedBlocks = Array.from(grouped.keys()).sort((a, b) => { if (a === null) return 1; if (b === null) return -1; return a - b; });
 
+  let lastSectionName: string | null = null;
+
   sortedBlocks.forEach(blockId => {
     const questions = grouped.get(blockId) || [];
-    const blockRow = sheet.getRow(currentRow);
-    blockRow.getCell(1).value = ''; blockRow.getCell(2).value = getSectionDisplayName(blockId, questions);
-    styleSectionRow(blockRow, fontName, sectionArgb); blockRow.commit(); currentRow++;
-
     const sortedQuestions = [...questions].sort((a, b) => a.subId - b.subId);
+
     sortedQuestions.forEach(question => {
+      const sectionName = question.pageName ?? getSectionDisplayName(blockId, questions);
+
+      if (sectionName !== lastSectionName) {
+        lastSectionName = sectionName;
+        const blockRow = sheet.getRow(currentRow);
+        blockRow.getCell(1).value = '';
+        blockRow.getCell(2).value = sectionName;
+        styleSectionRow(blockRow, fontName, sectionArgb);
+        blockRow.commit();
+        currentRow++;
+      }
+
       const row = sheet.getRow(currentRow);
       row.getCell(1).value = { formula: `IFERROR(LEFT(B${currentRow},SEARCH(" ",B${currentRow})-1),B${currentRow})` };
-      const labelWithKey = question.questionKey ? `${question.questionKey} ${question.questionText}` : question.questionText;
-      row.getCell(2).value = labelWithKey;
+      row.getCell(2).value = question.questionKey
+        ? `${question.questionKey} ${question.questionText}`
+        : question.questionText;
       row.getCell(2).alignment = { wrapText: true, vertical: 'top' };
 
       if (question.type === 'scale_1_10_na') {
@@ -249,7 +403,7 @@ function createEstrazioneGraficiSheet(workbook: ExcelJS.Workbook, survey: Parsed
     });
   });
 
-  sheet.getColumn(1).width = 10; sheet.getColumn(2).width = 60; sheet.getColumn(3).width = 10;
+  sheet.getColumn(1).width = 8; sheet.getColumn(2).width = 55; sheet.getColumn(3).width = 10;
   for (let i = 4; i <= 3 + numRespondents; i++) sheet.getColumn(i).width = 12;
   sheet.views = [{ state: 'frozen', xSplit: 0, ySplit: 1 }];
 }
@@ -296,18 +450,30 @@ function createPerPdfSheet(workbook: ExcelJS.Workbook, survey: ParsedSurvey, exp
   const grouped = groupQuestionsByBlock(survey.questions);
   const sortedBlocks = Array.from(grouped.keys()).sort((a, b) => { if (a === null) return 1; if (b === null) return -1; return a - b; });
 
+  let lastSectionName: string | null = null;
+
   sortedBlocks.forEach(blockId => {
     const questions = grouped.get(blockId) || [];
-    const blockRow = sheet.getRow(currentRow);
-    blockRow.getCell(1).value = ''; blockRow.getCell(2).value = getSectionDisplayName(blockId, questions);
-    styleSectionRow(blockRow, fontName, sectionArgb); currentRow++;
-
     const sortedQuestions = [...questions].sort((a, b) => a.subId - b.subId);
+
     sortedQuestions.forEach(question => {
+      const sectionName = question.pageName ?? getSectionDisplayName(blockId, questions);
+
+      if (sectionName !== lastSectionName) {
+        lastSectionName = sectionName;
+        const blockRow = sheet.getRow(currentRow);
+        blockRow.getCell(1).value = '';
+        blockRow.getCell(2).value = sectionName;
+        styleSectionRow(blockRow, fontName, sectionArgb);
+        currentRow++;
+      }
+
       const row = sheet.getRow(currentRow);
       row.getCell(1).value = { formula: `IFERROR(LEFT(B${currentRow},SEARCH(" ",B${currentRow})-1),B${currentRow})` };
-      const labelWithKey = question.questionKey ? `${question.questionKey} ${question.questionText}` : question.questionText;
-      row.getCell(2).value = labelWithKey; row.getCell(2).alignment = { wrapText: true, vertical: 'top' };
+      row.getCell(2).value = question.questionKey
+        ? `${question.questionKey} ${question.questionText}`
+        : question.questionText;
+      row.getCell(2).alignment = { wrapText: true, vertical: 'top' };
 
       if (question.type === 'scale_1_10_na') {
         row.getCell(3).value = { formula: `IFERROR(VLOOKUP(A${currentRow},'estrazione per grafici'!$A:$C,3,FALSE),"")` };
@@ -326,7 +492,7 @@ function createPerPdfSheet(workbook: ExcelJS.Workbook, survey: ParsedSurvey, exp
     });
   });
 
-  sheet.getColumn(1).width = 10; sheet.getColumn(2).width = 60; sheet.getColumn(3).width = 10;
+  sheet.getColumn(1).width = 8; sheet.getColumn(2).width = 55; sheet.getColumn(3).width = 10;
   sheet.getColumn(4).width = 20; sheet.getColumn(6).width = 12; sheet.getColumn(7).width = 25; sheet.getColumn(8).width = 8;
 }
 
@@ -352,7 +518,6 @@ async function createGraficiSheet(workbook: ExcelJS.Workbook, survey: ParsedSurv
       const questions = grouped.get(blockId) || [];
       if (questions.length === 0) continue;
 
-      // Block label
       const labelRow = sheet.getRow(currentRow);
       labelRow.getCell(1).value = getSectionDisplayName(blockId, questions);
       labelRow.getCell(1).font = { bold: true, size: 14, name: fontName };
