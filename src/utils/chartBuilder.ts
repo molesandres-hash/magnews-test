@@ -5,6 +5,13 @@ import { useTemplateStore } from '@/store/templateStore';
 
 const SCALE_ORDER = ['10', '9', '8', '7', '6', '5', '4', '3', '2', '1', 'N/A'];
 
+/** Convert a mean value (1-10) to a categorical axis position.
+ *  SCALE_ORDER: '10'=0, '9'=1, ... '1'=9, 'N/A'=10
+ *  So position = 10 - mean */
+function meanToAxisPos(mean: number): number {
+  return Math.max(0, Math.min(10, 10 - mean));
+}
+
 function getChartHeightPx(settings: ChartSettings): number {
   if (settings.chartHeight === 'compact') return 280;
   if (settings.chartHeight === 'tall') return 520;
