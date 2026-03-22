@@ -158,7 +158,7 @@ function createFoglio2Sheet(workbook: ExcelJS.Workbook, survey: ParsedSurvey, fo
     const questions = grouped.get(blockId) || [];
     if (blockId !== null) {
       const pageRow = sheet.getRow(currentRow);
-      pageRow.getCell(1).value = 'Page'; pageRow.getCell(2).value = `Page ${blockId}`;
+      pageRow.getCell(1).value = 'Page'; pageRow.getCell(2).value = getSectionDisplayName(blockId, questions);
       styleSectionRow(pageRow, fontName, sectionArgb); pageRow.commit(); currentRow++;
     }
     questions.forEach(question => {
